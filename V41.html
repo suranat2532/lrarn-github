@@ -1,0 +1,1717 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ระบบบันทึกข้อมูลตลาดสด</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@300;400;500;600;700&family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+
+    <style>
+        body {
+            font-family: 'Noto Sans Thai', 'Sarabun', sans-serif;
+            background: linear-gradient(135deg, #2e1065 0%, #1e3a8a 50%, #0369a1 100%);
+            min-height: 100vh;
+            color: #f8fafc;
+        }
+        .glass-card {
+            background: rgba(255, 255, 255, 0.07);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+        }
+        .glass-input {
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            color: white;
+            transition: all 0.3s ease;
+        }
+        .glass-input:focus {
+            background: rgba(255, 255, 255, 0.18);
+            border-color: #38bdf8;
+            box-shadow: 0 0 15px rgba(56, 189, 248, 0.4);
+            outline: none;
+        }
+        .tab-btn {
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .tab-btn.active {
+            background: rgba(255, 255, 255, 0.2);
+            border-color: #38bdf8;
+            box-shadow: 0 4px 15px rgba(56, 189, 248, 0.25);
+        }
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: rgba(255, 255, 255, 0.05); }
+        ::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.2); border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.3); }
+        
+        @media print {
+            body { background: white; color: black; }
+            .no-print { display: none; }
+            .print-page { display: block; page-break-after: always; }
+        }
+    </style>
+</head>
+<body class="p-4 md:p-8 relative">
+
+    <div id="globalLoginOverlay" class="fixed inset-0 bg-slate-900/95 backdrop-blur-xl z-[100] flex items-center justify-center p-4">
+        <div class="glass-card w-full max-w-md p-8 rounded-3xl shadow-2xl border border-white/20 text-center">
+            <div class="mb-6">
+                <div class="w-20 h-20 bg-gradient-to-tr from-cyan-400 to-blue-600 rounded-full flex items-center justify-center mx-auto mb-4 shadow-lg shadow-cyan-500/30">
+                    <i class="fa-solid fa-store text-3xl text-white"></i>
+                </div>
+                <div class="flex items-center justify-start px-2 mt-1 mb-2">
+                    <label class="flex items-center gap-2 cursor-pointer text-sm text-slate-300 hover:text-white transition">
+                        <input type="checkbox" id="loginRememberMe" class="w-4 h-4 accent-cyan-500 rounded cursor-pointer">
+                        <span>จดจำบัญชีผู้ใช้และรหัสผ่าน</span>
+                    </label>
+                </div>
+                <h2 class="text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-blue-300">เข้าสู่ระบบ</h2>
+                <p class="text-slate-400 text-sm mt-2">โปรดยืนยันตัวตนเพื่อเข้าใช้งานระบบ</p>
+            </div>
+            <div class="space-y-4">
+                <input type="text" id="loginUsername" placeholder="ชื่อผู้ใช้ (Username)" class="glass-input w-full p-4 rounded-xl text-center font-medium placeholder-slate-400">
+                <input type="password" id="loginPassword" placeholder="รหัสผ่าน (Password)" class="glass-input w-full p-4 rounded-xl text-center font-medium placeholder-slate-400" onkeypress="if(event.key === 'Enter') handleLogin()">
+                <button onclick="handleLogin()" class="w-full bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700 text-white font-bold py-4 rounded-xl shadow-lg transition duration-300 mt-2">
+                    เข้าสู่ระบบ
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div class="max-w-7xl mx-auto">
+        <header class="text-center mb-8 animate-fade-in relative no-print">
+            <div class="absolute right-0 top-0 flex flex-col items-end gap-1">
+                <div class="text-xs text-slate-300 bg-white/10 px-3 py-1 rounded-full border border-white/10 flex items-center gap-2">
+                    <i class="fa-solid fa-user-circle text-cyan-400"></i> <span id="displayCurrentUser">ผู้ใช้งาน: -</span>
+                </div>
+                <button onclick="handleLogout()" class="text-[10px] text-rose-400 hover:text-rose-300 underline">ออกจากระบบ</button>
+            </div>
+            <h1 id="displaySystemName" class="text-4xl md:text-5xl font-black tracking-wide text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-sky-300 to-purple-300 drop-shadow-lg mb-2">
+                ระบบบันทึกข้อมูลตลาดสด
+            </h1>
+            <p class="text-slate-300 text-sm md:text-base font-light tracking-widest uppercase">SaaS Marketplace Financial Platform</p>
+        </header>
+
+        <nav class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-8 no-print" id="mainNav">
+            <button onclick="switchTab('tab-status')" id="btn-tab-status" class="tab-btn active glass-card p-4 rounded-2xl flex flex-col items-center justify-center gap-2 hover:scale-105 border-b-4 border-transparent text-center">
+                <i class="fa-solid fa-calendar-check text-2xl text-cyan-400"></i>
+                <span class="text-xs md:text-sm font-semibold">เช็คสถานะการชำระ</span>
+            </button>
+            <button onclick="switchTab('tab-billing')" id="btn-tab-billing" class="tab-btn glass-card p-4 rounded-2xl flex flex-col items-center justify-center gap-2 hover:scale-105 border-b-4 border-transparent text-center">
+                <i class="fa-solid fa-file-invoice-dollar text-2xl text-emerald-400"></i>
+                <span class="text-xs md:text-sm font-semibold">เช็ครายการชำระ</span>
+            </button>
+            <button onclick="switchTab('tab-history')" id="btn-tab-history" class="tab-btn glass-card p-4 rounded-2xl flex flex-col items-center justify-center gap-2 hover:scale-105 border-b-4 border-transparent text-center">
+                <i class="fa-solid fa-magnifying-glass-chart text-2xl text-amber-400"></i>
+                <span class="text-xs md:text-sm font-semibold">ค้นหาประวัติร้านค้า</span>
+            </button>
+            <button onclick="switchTab('tab-receipt')" id="btn-tab-receipt" class="tab-btn glass-card p-4 rounded-2xl flex flex-col items-center justify-center gap-2 hover:scale-105 border-b-4 border-transparent text-center">
+                <i class="fa-solid fa-print text-2xl text-sky-400"></i>
+                <span class="text-xs md:text-sm font-semibold">พิมพ์ใบแจ้งยอด</span>
+            </button>
+            <button onclick="switchTab('tab-report')" id="btn-tab-report" class="tab-btn glass-card p-4 rounded-2xl flex flex-col items-center justify-center gap-2 hover:scale-105 border-b-4 border-transparent text-center admin-only">
+                <i class="fa-solid fa-chart-pie text-2xl text-purple-400"></i>
+                <span class="text-xs md:text-sm font-semibold">รายงานและสถิติ</span>
+            </button>
+            <button onclick="switchTab('tab-setting')" id="btn-tab-setting" class="tab-btn glass-card p-4 rounded-2xl flex flex-col items-center justify-center gap-2 hover:scale-105 border-b-4 border-transparent text-center admin-only">
+                <i class="fa-solid fa-sliders text-2xl text-rose-400"></i>
+                <span class="text-xs md:text-sm font-semibold">ตั้งค่าระบบ (Admin)</span>
+            </button>
+        </nav>
+
+        <section id="tab-status" class="tab-content glass-card rounded-3xl p-6 shadow-2xl no-print">
+            <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+                <div>
+                    <h2 class="text-2xl font-bold flex items-center gap-2 text-cyan-300">
+                        <i class="fa-solid fa-calendar-check"></i> ตรวจสอบและเช็คสถานะการชำระเงิน
+                    </h2>
+                    <p class="text-xs text-slate-300 mt-1">บันทึกสถานะการชำระประจำวันแยกตามกลุ่มประเภท</p>
+                </div>
+                <div class="flex flex-wrap items-center gap-3">
+                    <select id="statusGroupFilter" onchange="currentPageStatus=1; renderStatusTable()" class="glass-input px-4 py-2 rounded-xl text-sm font-medium">
+                        <option value="monthly">📋 กลุ่มรายเดือน</option>
+                        <option value="weekly">📋 กลุ่มรายสัปดาห์</option>
+                        <option value="daily">📋 กลุ่มรายวัน</option>
+                    </select>
+                    <input type="date" id="statusDatePicker" onchange="currentPageStatus=1; renderStatusTable(); autoLoadBillingFromSheet();" class="glass-input px-4 py-2 rounded-xl text-sm text-white">
+                </div>
+            </div>
+
+            <div class="overflow-x-auto rounded-2xl border border-white/10 mb-4">
+                <table class="w-full text-left border-collapse">
+                    <thead>
+                        <tr class="bg-white/10 text-slate-200 text-sm uppercase tracking-wider font-semibold">
+                            <th class="p-4">รหัสร้าน</th>
+                            <th class="p-4">ชื่อร้านค้า</th>
+                            <th class="p-4 text-center">สถานะการชำระเงิน</th>
+                            <th class="p-4 text-right">ยอดเงินที่ต้องชำระ</th>
+                            <th class="p-4 text-center">หลักฐาน (JPG)</th>
+                            <th class="p-4 text-center">สถานะล็อก</th>
+                        </tr>
+                    </thead>
+                    <tbody id="statusTableBody" class="divide-y divide-white/5 text-sm"></tbody>
+                </table>
+            </div>
+            
+            <div id="statusPagination" class="flex justify-center items-center gap-2 mt-4 text-sm mb-6"></div>
+
+            <div class="mt-6 flex justify-end">
+                <button onclick="saveStatusData()" class="bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700 text-white font-bold px-8 py-3 rounded-xl shadow-lg hover:shadow-cyan-500/20 transition duration-300 flex items-center gap-2">
+                    <i class="fa-solid fa-floppy-disk"></i> บันทึกข้อมูลหน้านี้
+                </button>
+            </div>
+        </section>
+
+        <section id="tab-billing" class="tab-content glass-card rounded-3xl p-6 shadow-2xl hidden no-print">
+            <div class="mb-4">
+                <h2 class="text-2xl font-bold flex items-center gap-2 text-emerald-300">
+                    <i class="fa-solid fa-file-invoice-dollar"></i> จัดการรายการคำนวณค่าใช้จ่าย
+                </h2>
+                <p class="text-xs text-slate-300 mt-1">คลิกที่แถวของร้านค้าเพื่อเปิดหน้าต่างกรอกรายละเอียดค่าใช้จ่าย</p>
+            </div>
+
+            <div class="glass-card p-4 rounded-2xl mb-6 border border-emerald-500/20 bg-emerald-500/5 flex flex-col lg:flex-row gap-4 items-center justify-between no-print">
+                <div class="flex-1 w-full flex flex-col gap-2">
+                    <div class="flex justify-between items-center">
+                        <label class="text-xs font-bold text-emerald-300">
+                            <i class="fa-solid fa-link"></i> ลิงก์ Google Sheet สำหรับดึงข้อมูลชำระเงินอัตโนมัติ
+                        </label>
+                        <div id="billingSheetStatusIndicator" class="flex items-center gap-1.5 text-xs px-2 py-1 rounded-lg bg-white/5 border border-white/10 hidden">
+                            <span id="billingSheetStatusDot" class="w-2.5 h-2.5 rounded-full bg-rose-500 shadow-[0_0_8px_rgba(244,63,94,0.6)]"></span>
+                            <span id="billingSheetStatusText" class="text-slate-300 font-medium">ออฟไลน์</span>
+                        </div>
+                    </div>
+                    <input type="text" id="billingSheetUrl" onchange="autoLoadBillingFromSheet()" placeholder="วาง URL ของ Google App Script ที่นี่แล้วกด Enter / คลิกพื้นที่ว่าง..." class="glass-input w-full p-2.5 rounded-xl text-sm border-emerald-500/30">
+                </div>
+                <div class="flex-1 w-full flex flex-col gap-2">
+                    <label class="text-xs font-bold text-emerald-300">
+                        <i class="fa-solid fa-file-import"></i> อัปโหลดบัญชีสรุปรายการเงินตลาด (Excel)
+                    </label>
+                    <label class="bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white text-sm font-bold px-4 py-2.5 rounded-xl cursor-pointer flex items-center justify-center gap-2 shadow-lg transition">
+                        <i class="fa-solid fa-upload"></i> คลิกเพื่ออัปโหลดไฟล์ (.xlsx)
+                        <input type="file" id="excelImportBilling" onchange="importBillingFromExcel(event)" accept=".xlsx, .xls" class="hidden">
+                    </label>
+                </div>
+            </div>
+            <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+                <div class="flex flex-1 max-w-xl gap-3 flex-col sm:flex-row">
+                    <div class="relative flex-1">
+                        <i class="fa-solid fa-magnifying-glass absolute left-4 top-3.5 text-slate-400"></i>
+                        <input type="text" id="billingSearchInput" oninput="currentPageBilling=1; renderBillingTable()" placeholder="พิมพ์ชื่อร้านค้า หรือ รหัสร้านค้า เพื่อค้นหา..." class="glass-input w-full pl-11 pr-4 py-3 rounded-xl text-sm focus:ring-emerald-400 focus:border-emerald-400">
+                    </div>
+                    <select id="billingGroupFilter" onchange="currentPageBilling=1; renderBillingTable()" class="glass-input px-4 py-3 rounded-xl text-sm font-medium">
+                        <option value="all">🌐 แสดงทุกกลุ่มลูกค้า</option>
+                        <option value="monthly">📋 ลูกค้ารายเดือน</option>
+                        <option value="weekly">📋 ลูกค้ารายสัปดาห์</option>
+                        <option value="daily">📋 ลูกค้ารายวัน</option>
+                    </select>
+                </div>
+                <div class="flex flex-wrap items-center gap-2">
+                    <button onclick="rolloverAllMeters()" class="bg-blue-600 hover:bg-blue-700 text-white font-semibold px-4 py-3 md:py-2 rounded-xl text-sm transition flex items-center justify-center gap-2 shadow-lg shadow-blue-900/40 whitespace-nowrap">
+                        <i class="fa-solid fa-forward-step"></i> ยกยอด
+                    </button>
+                    <button onclick="undoRolloverAllMeters()" class="bg-slate-600 hover:bg-slate-700 text-white font-semibold px-4 py-3 md:py-2 rounded-xl text-sm transition flex items-center justify-center gap-2 shadow-lg shadow-slate-900/40 whitespace-nowrap">
+                        <i class="fa-solid fa-backward-step"></i> ถอยหลัง
+                    </button>
+                    <button onclick="exportBillingToExcel()" class="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-4 py-3 md:py-2 rounded-xl text-sm transition flex items-center justify-center gap-2 shadow-lg shadow-emerald-900/40 whitespace-nowrap admin-only">
+                        <i class="fa-solid fa-file-excel"></i> ดาวน์โหลดรายการ (Excel)
+                    </button>
+                </div>
+            </div>
+
+            <div class="overflow-x-auto rounded-2xl border border-white/10 mb-4">
+                <table class="w-full text-left border-collapse">
+                    <thead>
+                        <tr class="bg-white/10 text-slate-200 text-sm font-semibold">
+                            <th class="p-4">รหัส</th>
+                            <th class="p-4">ชื่อร้าน</th>
+                            <th class="p-4 text-right">ค่าเช่าล็อก</th>
+                            <th class="p-4 text-right">ค่าน้ำ (บาท)</th>
+                            <th class="p-4 text-right">ค่าไฟ (บาท)</th>
+                            <th class="p-4 text-right">ค่าขยะ</th>
+                            <th class="p-4 text-right">ค่าปรับล่าช้า</th>
+                            <th class="p-4 text-right">อื่นๆ</th>
+                            <th class="p-4 text-right bg-emerald-500/10 font-bold text-emerald-300">รวมยอดทั้งหมด</th>
+                            <th class="p-4 text-center">การจัดการ</th>
+                        </tr>
+                    </thead>
+                    <tbody id="billingTableBody" class="divide-y divide-white/5 text-sm"></tbody>
+                </table>
+            </div>
+            <div id="billingPagination" class="flex justify-center items-center gap-2 mt-4 text-sm"></div>
+        </section>
+
+        <div id="billingModal" class="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center p-4 hidden z-50 no-print">
+            <div class="glass-card w-full max-w-2xl rounded-3xl p-6 text-white shadow-2xl border border-white/20">
+                <div class="flex justify-between items-center mb-4 border-b border-white/10 pb-3">
+                    <h3 class="text-xl font-bold text-emerald-300 flex items-center gap-2">
+                        <i class="fa-solid fa-calculator"></i> คำนวณค่าใช้จ่ายอย่างละเอียด <span id="modalShopName" class="text-white"></span>
+                    </h3>
+                    <button onclick="closeBillingModal()" class="text-slate-400 hover:text-white text-xl"><i class="fa-solid fa-xmark"></i></button>
+                </div>
+                <input type="hidden" id="modalShopId">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div><label class="block text-xs font-semibold text-slate-300 mb-1">ค่าเช่าล็อก (รับจาก Admin)</label><input type="number" id="inputRent" class="glass-input w-full p-2.5 rounded-xl text-sm"></div>
+                    <div><label class="block text-xs font-semibold text-slate-300 mb-1">ค่าขยะ (Default 0)</label><input type="number" id="inputTrash" value="0" class="glass-input w-full p-2.5 rounded-xl text-sm"></div>
+                    <div class="glass-card p-3 rounded-2xl border border-white/10 bg-blue-500/5">
+                        <div class="flex justify-between items-center mb-2">
+                            <span class="text-xs font-bold text-blue-300"><i class="fa-solid fa-droplet"></i> ค่าน้ำประปา</span>
+                            <div class="flex items-center gap-1"><span class="text-[10px] text-slate-300">หน่วยละ:</span><input type="number" id="inputWaterRate" value="20" oninput="calcModalWater()" class="glass-input w-12 p-1 rounded text-xs text-center"><span class="text-[10px] text-slate-300">บ.</span></div>
+                        </div>
+                        <div class="grid grid-cols-2 gap-2">
+                            <div><label class="block text-[10px] text-slate-300">มิเตอร์ครั้งก่อน</label><input type="number" id="inputWaterBefore" oninput="calcModalWater()" class="glass-input w-full p-2 rounded-lg text-xs"></div>
+                            <div><label class="block text-[10px] text-slate-300">มิเตอร์ครั้งหลัง</label><input type="number" id="inputWaterAfter" oninput="calcModalWater()" class="glass-input w-full p-2 rounded-lg text-xs"></div>
+                        </div>
+                        <div class="mt-2 text-right text-xs text-blue-200">รวมเงิน <span id="textWaterTotal" class="font-bold">0</span> บาท</div>
+                    </div>
+                    <div class="glass-card p-3 rounded-2xl border border-white/10 bg-amber-500/5">
+                        <div class="flex justify-between items-center mb-2">
+                            <span class="text-xs font-bold text-amber-300"><i class="fa-solid fa-bolt"></i> ค่าไฟฟ้า</span>
+                            <div class="flex items-center gap-1"><span class="text-[10px] text-slate-300">หน่วยละ:</span><input type="number" id="inputElecRate" value="10" oninput="calcModalElec()" class="glass-input w-12 p-1 rounded text-xs text-center"><span class="text-[10px] text-slate-300">บ.</span></div>
+                        </div>
+                        <div class="grid grid-cols-2 gap-2">
+                            <div><label class="block text-[10px] text-slate-300">มิเตอร์ครั้งก่อน</label><input type="number" id="inputElecBefore" oninput="calcModalElec()" class="glass-input w-full p-2 rounded-lg text-xs"></div>
+                            <div><label class="block text-[10px] text-slate-300">มิเตอร์ครั้งหลัง</label><input type="number" id="inputElecAfter" oninput="calcModalElec()" class="glass-input w-full p-2 rounded-lg text-xs"></div>
+                        </div>
+                        <div class="mt-2 text-right text-xs text-amber-200">รวมเงิน <span id="textElecTotal" class="font-bold">0</span> บาท</div>
+                    </div>
+                    <div><label class="block text-xs font-semibold text-slate-300 mb-1">ค่าปรับล่าช้า (Default 0)</label><input type="number" id="inputPenalty" value="0" class="glass-input w-full p-2.5 rounded-xl text-sm"></div>
+                    <div><label class="block text-xs font-semibold text-slate-300 mb-1">รายการอื่นๆ (Default 0)</label><input type="number" id="inputOther" value="0" class="glass-input w-full p-2.5 rounded-xl text-sm"></div>
+                </div>
+                <div class="mt-6 p-4 rounded-xl bg-white/5 border border-white/10 flex justify-between items-center">
+                    <span class="font-bold text-slate-200">รวมยอดเงินที่ต้องชำระทั้งหมด</span>
+                    <span class="text-2xl font-black text-emerald-400" id="textModalGrandTotal">0.00 บาท</span>
+                </div>
+                <div class="mt-6 flex justify-end gap-3">
+                    <button onclick="closeBillingModal()" class="bg-white/10 hover:bg-white/20 text-white font-medium px-4 py-2 rounded-xl text-sm transition">ยกเลิก</button>
+                    <button onclick="saveModalBilling()" class="bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white font-bold px-6 py-2 rounded-xl text-sm shadow-lg transition">คำนวณและบันทึก</button>
+                </div>
+            </div>
+        </div>
+
+        <section id="tab-history" class="tab-content glass-card rounded-3xl p-6 shadow-2xl hidden no-print">
+            <div class="mb-6">
+                <h2 class="text-2xl font-bold flex items-center gap-2 text-amber-300">
+                    <i class="fa-solid fa-magnifying-glass-chart"></i> ค้นหาประวัติการชำระเงินของร้านค้า (Real-time)
+                </h2>
+                <p class="text-xs text-slate-300 mt-1">พิมพ์คำค้นหาเพื่อกรองรายชื่อและดูประวัติย้อนหลังผ่านหน้าต่างแบบทันที</p>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                <div class="md:col-span-2 relative">
+                    <i class="fa-solid fa-magnifying-glass absolute left-4 top-3.5 text-slate-400"></i>
+                    <input type="text" id="historySearchInput" oninput="currentPageHistory=1; renderHistorySearchTable()" placeholder="พิมพ์ชื่อร้านค้า หรือ รหัสร้านค้า เพื่อค้นหาทันที..." class="glass-input w-full pl-11 pr-4 py-3 rounded-xl text-sm">
+                </div>
+                <div>
+                    <select id="historyGroupFilter" onchange="currentPageHistory=1; renderHistorySearchTable()" class="glass-input w-full p-3 rounded-xl text-sm font-medium">
+                        <option value="all">🌐 แสดงทุกกลุ่มร้านค้า</option>
+                        <option value="monthly">📋 กลุ่มรายเดือนเท่านั้น</option>
+                        <option value="weekly">📋 กลุ่มรายสัปดาห์เท่านั้น</option>
+                        <option value="daily">📋 กลุ่มรายวันเท่านั้น</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="overflow-x-auto rounded-2xl border border-white/10 mb-4">
+                <table class="w-full text-left border-collapse">
+                    <thead>
+                        <tr class="bg-white/10 text-slate-200 text-sm font-semibold">
+                            <th class="p-4">รหัสร้าน</th>
+                            <th class="p-4">ชื่อร้าน</th>
+                            <th class="p-4">ประเภทกลุ่ม</th>
+                            <th class="p-4 text-right">ยอดคงค้างล่าสุด</th>
+                            <th class="p-4 text-center">ดูประวัติแบบละเอียด</th>
+                        </tr>
+                    </thead>
+                    <tbody id="historySearchTableBody" class="divide-y divide-white/5 text-sm"></tbody>
+                </table>
+            </div>
+            <div id="historyPagination" class="flex justify-center items-center gap-2 mt-4 text-sm"></div>
+        </section>
+
+        <div id="historyPopupModal" class="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 hidden z-50 no-print">
+            <div class="glass-card w-full max-w-4xl rounded-3xl p-6 text-white shadow-2xl border border-white/20 max-h-[85vh] flex flex-col">
+                <div class="flex justify-between items-center mb-4 border-b border-white/10 pb-3">
+                    <h3 class="text-xl font-bold text-amber-300 flex items-center gap-2">
+                        <i class="fa-solid fa-clock-rotate-left"></i> ประวัติรายการทั้งหมดของ <span id="popupShopTitle" class="text-white"></span>
+                    </h3>
+                    <button onclick="closeHistoryPopup()" class="text-slate-400 hover:text-white text-xl"><i class="fa-solid fa-xmark"></i></button>
+                </div>
+                <div class="overflow-y-auto flex-1 rounded-xl border border-white/10">
+                    <table class="w-full text-left border-collapse">
+                        <thead class="sticky top-0 bg-slate-900/90 text-xs font-semibold uppercase tracking-wider text-slate-300">
+                            <tr>
+                                <th class="p-3">วันที่</th><th class="p-3 text-center">สถานะ</th><th class="p-3 text-right">ค่าเช่า</th><th class="p-3 text-right">ค่าน้ำไฟ</th><th class="p-3 text-right">ขยะอื่นๆ</th><th class="p-3 text-right bg-white/5">ยอดสุทธิ</th><th class="p-3 text-center">หลักฐาน</th>
+                            </tr>
+                        </thead>
+                        <tbody id="historyPopupTableBody" class="divide-y divide-white/5 text-xs text-slate-200"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <section id="tab-report" class="tab-content glass-card rounded-3xl p-6 shadow-2xl hidden no-print">
+            <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+                <div>
+                    <h2 class="text-2xl font-bold flex items-center gap-2 text-purple-300">
+                        <i class="fa-solid fa-chart-pie"></i> รายงานสถิติและภาพรวมการจัดเก็บเงินตลาดสด
+                    </h2>
+                    <p class="text-xs text-slate-300 mt-1">สรุปข้อมูลเปอร์เซ็นต์ ตัวเลขผลการเรียกเก็บเงินรวมทุกประเภท</p>
+                </div>
+                <button onclick="exportReportToExcel()" class="bg-purple-600 hover:bg-purple-700 text-white font-semibold px-4 py-2 rounded-xl text-sm transition flex items-center gap-2 shadow-lg">
+                    <i class="fa-solid fa-file-excel"></i> ดาวน์โหลดรายงานสถิติ (Excel)
+                </button>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+                <div class="glass-card p-4 rounded-2xl bg-emerald-500/10 border-emerald-500/20 text-center">
+                    <span class="text-xs text-emerald-300 block mb-1">✅ รวมเงินที่จ่ายแล้ว</span>
+                    <span id="statPaidAmt" class="text-2xl font-black text-emerald-400">0.00 ฿</span>
+                </div>
+                <div class="glass-card p-4 rounded-2xl bg-amber-500/10 border-amber-500/20 text-center">
+                    <span class="text-xs text-amber-300 block mb-1">📝 ยอดรวมค้างชำระ</span>
+                    <span id="statPendingAmt" class="text-2xl font-black text-amber-400">0.00 ฿</span>
+                </div>
+                <div class="glass-card p-4 rounded-2xl bg-rose-500/10 border-rose-500/20 text-center">
+                    <span class="text-xs text-rose-300 block mb-1">❌ รวมเงินที่ยังไม่ชำระ</span>
+                    <span id="statUnpaidAmt" class="text-2xl font-black text-rose-400">0.00 ฿</span>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+                <div class="glass-card p-4 rounded-2xl lg:col-span-1 flex flex-col justify-center items-center">
+                    <h4 class="text-sm font-semibold mb-4 text-center text-slate-300">สัดส่วนเปอร์เซ็นต์ภาพรวมสถานะการชำระ</h4>
+                    <div class="w-full max-w-[220px]">
+                        <canvas id="statusPieChart"></canvas>
+                    </div>
+                </div>
+                <div class="glass-card p-4 rounded-2xl lg:col-span-2">
+                    <h4 class="text-sm font-semibold mb-2 text-slate-300">ตารางรายงานรายการชำระแยกรายวันย้อนหลัง</h4>
+                    <div class="overflow-x-auto max-h-[250px] overflow-y-auto rounded-xl border border-white/10">
+                        <table class="w-full text-left text-xs border-collapse">
+                            <thead class="sticky top-0 bg-slate-900 text-slate-300">
+                                <tr>
+                                    <th class="p-3">วันที่</th><th class="p-3">จ่ายแล้ว (ราย)</th><th class="p-3">ค้างชำระ (ราย)</th><th class="p-3">ยังไม่ชำระ (ราย)</th><th class="p-3 text-right">เรียกเก็บสุทธิ</th>
+                                </tr>
+                            </thead>
+                            <tbody id="reportTableBody" class="divide-y divide-white/5"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section id="tab-setting" class="tab-content glass-card rounded-3xl p-6 shadow-2xl hidden no-print">
+            <div id="adminControlPanel">
+                <div class="flex justify-between items-center border-b border-white/10 pb-4 mb-6">
+                    <div>
+                        <h2 class="text-2xl font-bold text-rose-300 flex items-center gap-2">
+                            <i class="fa-solid fa-unlock-keyhole"></i> แผงควบคุมระบบการจัดการหลัก (Admin Panel)
+                        </h2>
+                        <span class="text-xs bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded border border-emerald-500/30 mt-2 inline-block">Role: Administrator</span>
+                    </div>
+                </div>
+
+                <div class="flex gap-4 mb-6 border-b border-white/5 pb-2 overflow-x-auto">
+                    <button id="subtab-btn-general" onclick="switchSubSetting('general')" class="text-sm font-semibold border-b-2 border-rose-500 pb-2 text-rose-300 px-2 whitespace-nowrap">5.1 จัดการข้อมูลทั่วไป</button>
+                    <button id="subtab-btn-shops" onclick="switchSubSetting('shops')" class="text-sm font-semibold border-b-2 border-transparent pb-2 text-slate-400 hover:text-white px-2 whitespace-nowrap">5.2 จัดการรายชื่อร้านค้า</button>
+                    <button id="subtab-btn-users" onclick="switchSubSetting('users')" class="text-sm font-semibold border-b-2 border-transparent pb-2 text-slate-400 hover:text-white px-2 whitespace-nowrap">5.3 จัดการผู้ใช้งาน (Users)</button>
+                </div>
+
+                <div id="admin-sub-general" class="space-y-6">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div class="glass-card p-4 rounded-2xl">
+                            <label class="block text-sm font-semibold text-slate-200 mb-2">แก้ไขชื่อระบบส่วนหัวหลัก</label>
+                            <div class="flex gap-2">
+                                <input type="text" id="settingSystemName" class="glass-input flex-1 p-2 rounded-xl text-sm">
+                                <button onclick="updateSystemName()" class="bg-cyan-600 px-4 py-2 rounded-xl text-sm font-medium hover:bg-cyan-700">อัปเดต</button>
+                            </div>
+                        </div>
+                        <div class="glass-card p-4 rounded-2xl flex flex-col justify-center gap-3">
+                            <div class="text-xs font-semibold text-slate-300">การสำรองไฟล์นำเข้าโครงสร้างระบบร้านค้าผ่าน Excel</div>
+                            <div class="flex flex-wrap gap-2">
+                                <label class="bg-amber-600 hover:bg-amber-700 text-xs font-bold px-4 py-2 rounded-xl cursor-pointer flex items-center gap-2">
+                                    <i class="fa-solid fa-file-import"></i> อัปโหลดฐานข้อมูล Excel
+                                    <input type="file" id="excelImportShops" onchange="importShopsFromExcel(event)" accept=".xlsx, .xls" class="hidden">
+                                </label>
+                                <button onclick="exportShopsToExcel()" class="bg-blue-600 hover:bg-blue-700 text-xs font-bold px-4 py-2 rounded-xl flex items-center gap-2">
+                                    <i class="fa-solid fa-file-export"></i> ดาวน์โหลดฐานข้อมูล Excel
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="glass-card p-4 rounded-2xl flex flex-col justify-center gap-3 mt-4">
+                        <div class="flex justify-between items-center mb-1">
+                            <label class="block text-sm font-semibold text-slate-200">
+                                <i class="fa-solid fa-cloud"></i> ซิงค์ฐานข้อมูลรายชื่อร้านค้ากับ Google Sheets
+                            </label>
+                            <div id="sheetStatusIndicator" class="flex items-center gap-1.5 text-xs px-2 py-1 rounded-lg bg-white/5 border border-white/10">
+                                <span id="sheetStatusDot" class="w-2.5 h-2.5 rounded-full bg-rose-500 shadow-[0_0_8px_rgba(244,63,94,0.6)]"></span>
+                                <span id="sheetStatusText" class="text-slate-300 font-medium">ออฟไลน์</span>
+                            </div>
+                        </div>
+                        
+                        <div class="flex flex-col gap-3">
+                            <input type="text" id="settingSheetUrl" placeholder="วาง URL ของ Google Apps Script (Web App) ที่นี่..." class="glass-input w-full p-2.5 rounded-xl text-sm">
+                            <div class="flex flex-wrap gap-2">
+                                <button onclick="testSheetConnection()" class="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold px-4 py-2.5 rounded-xl flex items-center gap-2 transition shadow-lg shadow-indigo-900/40">
+                                    <i class="fa-solid fa-link"></i> ทดสอบการเชื่อมต่อ
+                                </button>
+                                <button onclick="loadFromSheet()" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-4 py-2.5 rounded-xl flex items-center gap-2 transition shadow-lg shadow-emerald-900/40">
+                                    <i class="fa-solid fa-cloud-arrow-down"></i> โหลดข้อมูลจาก Google Sheet
+                                </button>
+                            </div>
+                            <p class="text-[10px] text-slate-400 mt-1">* ระบบจะทำการ Backup ข้อมูลร้านค้าไปยัง Sheet อัตโนมัติเมื่อมีการ เพิ่ม/ลบ/แก้ไข รายชื่อ</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="admin-sub-shops" class="hidden space-y-6">
+                    <div class="glass-card p-4 rounded-2xl border border-white/10">
+                        <h4 class="text-sm font-bold text-rose-300 mb-3"><i class="fa-solid fa-square-plus"></i> เพิ่ม/แก้ไข รายชื่อร้านค้าเข้าระบบข้อมูลประจำตำแหน่ง</h4>
+                        <input type="hidden" id="shopEditIndex" value="-1">
+                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                            <div><label class="block text-xs text-slate-300 mb-1">ชื่อร้านค้า / หมายเลขล็อก</label><input type="text" id="shopFormName" placeholder="เช่น ร้านส้มตำป้าศรี ล็อก A5" class="glass-input w-full p-2.5 rounded-xl text-sm"></div>
+                            <div>
+                                <label class="block text-xs text-slate-300 mb-1">ประเภทสัญญาร้านค้า</label>
+                                <select id="shopFormType" class="glass-input w-full p-2.5 rounded-xl text-sm">
+                                    <option value="monthly">รายเดือน (รหัสขึ้นต้นด้วย A)</option>
+                                    <option value="weekly">รายสัปดาห์ (รหัสขึ้นต้นด้วย C)</option>
+                                    <option value="daily">รายวัน (รหัสขึ้นต้นด้วย B)</option>
+                                </select>
+                            </div>
+                            <div><label class="block text-xs text-slate-300 mb-1">ค่าเช่าล็อกพื้นฐานกำหนดส่ง (บาท)</label><input type="number" id="shopFormRent" value="0" class="glass-input w-full p-2.5 rounded-xl text-sm"></div>
+                        </div>
+                        <div class="mt-4 flex justify-end gap-2">
+                            <button onclick="clearShopForm()" class="bg-white/10 hover:bg-white/20 text-xs px-4 py-2 rounded-xl">ล้างฟอร์ม</button>
+                            <button onclick="saveShopForm()" class="bg-gradient-to-r from-rose-500 to-pink-600 text-xs font-bold px-6 py-2 rounded-xl shadow-md">บันทึกข้อมูลร้านค้า</button>
+                        </div>
+                    </div>
+
+                    <div class="mb-3 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                        <h4 class="text-sm font-bold text-slate-300">รายชื่อร้านค้าในระบบทั้งหมด</h4>
+                        <div class="flex flex-wrap items-center gap-3 w-full md:w-auto">
+                            <div class="relative flex-1 md:w-64">
+                                <i class="fa-solid fa-magnifying-glass absolute left-3 top-2.5 text-slate-400 text-xs"></i>
+                                <input type="text" id="adminShopSearchInput" oninput="currentPageAdmin=1; renderAdminShopsTable()" placeholder="ค้นหาชื่อ หรือ รหัสร้าน..." class="glass-input w-full pl-8 pr-3 py-1.5 rounded-xl text-xs">
+                            </div>
+                            <select id="adminShopGroupFilter" onchange="currentPageAdmin=1; renderAdminShopsTable()" class="glass-input px-3 py-1.5 rounded-xl text-xs font-medium">
+                                <option value="all">🌐 แสดงทุกกลุ่มลูกค้า</option>
+                                <option value="monthly">📋 ลูกค้ารายเดือน (A)</option>
+                                <option value="weekly">📋 ลูกค้ารายสัปดาห์ (C)</option>
+                                <option value="daily">📋 ลูกค้ารายวัน (B)</option>
+                            </select>
+                            <button onclick="deleteSelectedShops()" class="bg-rose-600 hover:bg-rose-700 text-white font-bold px-4 py-2 rounded-xl text-xs flex items-center gap-2 shadow-lg transition whitespace-nowrap">
+                                <i class="fa-solid fa-trash-can"></i> ลบรายการที่ติ๊กเลือก
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="overflow-x-auto rounded-2xl border border-white/10 mb-4">
+                        <table class="w-full text-left text-xs border-collapse">
+                            <thead>
+                                <tr class="bg-white/10 text-slate-300 uppercase font-semibold">
+                                    <th class="p-3 text-center w-12"><input type="checkbox" id="selectAllShops" onchange="toggleSelectAllShops(this)" class="w-4 h-4 accent-rose-400 cursor-pointer"></th>
+                                    <th class="p-3">รหัสร้านค้า (รันออโต้)</th><th class="p-3">ชื่อร้าน / รายละเอียด</th><th class="p-3">ประเภท</th><th class="p-3 text-right">ค่าเช่าพื้นฐาน</th><th class="p-3 text-center">การจัดการ</th>
+                                </tr>
+                            </thead>
+                            <tbody id="adminShopsTableBody" class="divide-y divide-white/5"></tbody>
+                        </table>
+                    </div>
+                    <div id="adminPagination" class="flex justify-center items-center gap-2 mt-4 text-sm"></div>
+                </div>
+
+                <div id="admin-sub-users" class="hidden space-y-6">
+                    <div class="glass-card p-4 rounded-2xl border border-white/10">
+                        <h4 class="text-sm font-bold text-cyan-300 mb-3"><i class="fa-solid fa-user-plus"></i> เพิ่มผู้ใช้งานระบบใหม่</h4>
+                        <div class="grid grid-cols-1 sm:grid-cols-4 gap-4">
+                            <div><label class="block text-xs text-slate-300 mb-1">Username (ชื่อล็อกอิน)</label><input type="text" id="userFormUsername" class="glass-input w-full p-2.5 rounded-xl text-sm"></div>
+                            <div><label class="block text-xs text-slate-300 mb-1">ชื่อผู้ใช้งาน</label><input type="text" id="userFormName" class="glass-input w-full p-2.5 rounded-xl text-sm"></div>
+                            <div><label class="block text-xs text-slate-300 mb-1">รหัสผ่าน</label><input type="password" id="userFormPassword" class="glass-input w-full p-2.5 rounded-xl text-sm"></div>
+                            <div>
+                                <label class="block text-xs text-slate-300 mb-1">สิทธิ์ (Role)</label>
+                                <select id="userFormRole" class="glass-input w-full p-2.5 rounded-xl text-sm">
+                                    <option value="staff">Staff (ทั่วไป)</option>
+                                    <option value="admin">Admin (แอดมิน)</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="mt-4 flex justify-end">
+                            <button onclick="addUser()" class="bg-gradient-to-r from-cyan-500 to-blue-600 text-xs font-bold px-6 py-2 rounded-xl shadow-md">เพิ่มผู้ใช้งาน</button>
+                        </div>
+                    </div>
+
+                    <div class="overflow-x-auto rounded-2xl border border-white/10">
+                        <table class="w-full text-left text-sm border-collapse">
+                            <thead>
+                                <tr class="bg-white/10 text-slate-300 font-semibold uppercase text-xs">
+                                    <th class="p-3">Username</th>
+                                    <th class="p-3">ชื่อ</th>
+                                    <th class="p-3">ระดับสิทธิ์</th>
+                                    <th class="p-3 text-center">จัดการ</th>
+                                </tr>
+                            </thead>
+                            <tbody id="usersTableBody" class="divide-y divide-white/5"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section id="tab-receipt" class="tab-content glass-card rounded-3xl p-6 shadow-2xl hidden no-print">
+            <div class="mb-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                <div>
+                    <h2 class="text-2xl font-bold flex items-center gap-2 text-sky-300">
+                        <i class="fa-solid fa-print"></i> ระบบจัดพิมพ์และดาวน์โหลดใบแจ้งยอดชำระเงิน
+                    </h2>
+                    <p class="text-xs text-slate-300 mt-1">ขนาดใบเสร็จควบคุมพิเศษ (10 ซม. X 14 ซม.) สามารถติ๊กเลือกเพื่อจัดพิมพ์ระบบจะแบ่งหน้าให้แผ่นละ 4 ร้านค้าลงหน้ากระดาษ A4 อัตโนมัติ</p>
+                </div>
+                <div class="flex flex-wrap gap-2">
+                    <label class="bg-sky-600 hover:bg-sky-700 text-xs font-bold px-4 py-2.5 rounded-xl cursor-pointer flex items-center gap-2 shadow-lg">
+                        <i class="fa-solid fa-qrcode"></i> อัปโหลดรูปภาพ QR Scan จ่าย (JPG)
+                        <input type="file" id="qrUploadInput" onchange="uploadQRImage(event)" accept="image/*" class="hidden">
+                    </label>
+                    <button onclick="printReceiptBatch()" class="bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-600 hover:to-blue-700 text-white font-bold px-5 py-2.5 rounded-xl text-xs flex items-center gap-2 shadow-lg">
+                        <i class="fa-solid fa-file-pdf"></i> สั่งพิมพ์ / ดาวน์โหลด PDF ใบแจ้งยอด
+                    </button>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                <div>
+                    <label class="block text-xs font-bold text-slate-300 mb-1">เลือกวันที่ที่ต้องการพิมพ์แจ้งยอด</label>
+                    <input type="date" id="receiptDatePicker" onchange="currentPageReceipt=1; renderReceiptSelectionTable()" class="glass-input w-full p-2 rounded-xl text-sm">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-slate-300 mb-1">กรองกลุ่มร้านค้า</label>
+                    <select id="receiptGroupFilter" onchange="currentPageReceipt=1; renderReceiptSelectionTable()" class="glass-input w-full p-2 rounded-xl text-sm">
+                        <option value="all">ทั้งหมด</option><option value="monthly">รายเดือน</option><option value="weekly">รายสัปดาห์</option><option value="daily">รายวัน</option>
+                    </select>
+                </div>
+                <div class="flex items-end justify-end text-xs text-cyan-300 font-semibold" id="receiptSelectCounter">เลือกแล้ว 0 ร้านค้าในรอบจัดพิมพ์นี้</div>
+            </div>
+
+            <div class="overflow-x-auto rounded-2xl border border-white/10 mb-4">
+                <table class="w-full text-left text-xs border-collapse">
+                    <thead>
+                        <tr class="bg-white/10 text-slate-200">
+                            <th class="p-3 text-center w-12">เลือก</th><th class="p-3">รหัสร้าน</th><th class="p-3">ชื่อร้านค้า</th><th class="p-3 text-right">ยอดรวมทั้งหมด</th><th class="p-3 text-center">สถานะวันดังกล่าว</th>
+                        </tr>
+                    </thead>
+                    <tbody id="receiptSelectionTableBody" class="divide-y divide-white/5"></tbody>
+                </table>
+            </div>
+            <div id="receiptPagination" class="flex justify-center items-center gap-2 mt-4 text-sm"></div>
+        </section>
+
+    </div>
+
+    <div id="printOutputFrame" class="hidden bg-white text-black p-0 m-0"></div>
+
+    <script>
+        // PAGINATION CONSTANTS
+        const ITEMS_PER_PAGE = 20;
+        let currentPageStatus = 1;
+        let currentPageBilling = 1;
+        let currentPageHistory = 1;
+        let currentPageAdmin = 1;
+        let currentPageReceipt = 1;
+        
+        // CLIENT DATABASE STRUCTURE (LOCALSTORAGE PERSISTENCE ENGINE)
+        let defaultShops = [
+            { id: 'A001', name: 'แผงผักสดเจ้พร', type: 'monthly', rent: 3500, isLocked: false },
+            { id: 'A002', name: 'เขียงหมูโก๊ย้ง', type: 'monthly', rent: 4500, isLocked: false },
+            { id: 'C001', name: 'เสื้อผ้าแฟชั่นคุณบี', type: 'weekly', rent: 800, isLocked: false },
+            { id: 'B001', name: 'ผลไม้ตามฤดูกาลพี่ตู่', type: 'daily', rent: 150, isLocked: false },
+            { id: 'B002', name: 'ข้าวมันไก่ตอนเบตง', type: 'daily', rent: 180, isLocked: false }
+        ];
+        
+        let defaultUsers = [
+            { username: 'admin', password: '8008', role: 'admin', name: 'ผู้ดูแลระบบ' },
+            { username: 'staff', password: '1234', role: 'staff', name: 'พนักงานบันทึกข้อมูล' }
+        ];
+        
+        let state = {
+            systemName: localStorage.getItem('market_sysName') || 'ระบบบันทึกข้อมูลตลาดสด',
+            shops: JSON.parse(localStorage.getItem('market_shops')) || defaultShops,
+            billingDetails: JSON.parse(localStorage.getItem('market_billing')) || {}, 
+            statusRecords: JSON.parse(localStorage.getItem('market_status')) || {},
+            qrImage: localStorage.getItem('market_qrCode') || 'https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=PROMPT_PAY_MOCK',
+            sheetUrl: localStorage.getItem('market_sheetUrl') || '',
+            billingSheetUrl: localStorage.getItem('market_billingSheetUrl') || '',
+            users: JSON.parse(localStorage.getItem('market_users')) || defaultUsers,
+            currentUser: JSON.parse(localStorage.getItem('market_current_user')) || null,
+            loginHistory: JSON.parse(localStorage.getItem('market_login_history')) || []
+        };
+
+        // SETUP APP ON LOAD
+        window.addEventListener('DOMContentLoaded', async () => {
+            const rememberUser = localStorage.getItem('market_remember_user');
+            const rememberPass = localStorage.getItem('market_remember_pass');
+            const rememberCheck = localStorage.getItem('market_remember_check');
+
+            if (rememberCheck === 'true') {
+                document.getElementById('loginUsername').value = rememberUser || '';
+                document.getElementById('loginPassword').value = rememberPass || '';
+                document.getElementById('loginRememberMe').checked = true;
+            }
+
+            if (!state.currentUser) {
+                document.getElementById('globalLoginOverlay').classList.remove('hidden');
+                document.getElementById('mainNav').classList.add('hidden');
+            } else {
+                applyPermissions();
+            }
+
+            document.getElementById('displaySystemName').innerText = state.systemName;
+            document.getElementById('settingSystemName').value = state.systemName;
+            document.getElementById('settingSheetUrl').value = state.sheetUrl;
+            document.getElementById('billingSheetUrl').value = state.billingSheetUrl || '';
+
+            let todayStr = new Date().toISOString().split('T')[0];
+            document.getElementById('statusDatePicker').value = todayStr;
+            document.getElementById('receiptDatePicker').value = todayStr;
+
+            // ตรวจสอบสถานะการเชื่อมต่อบิลลิ่งถ้ามี URL ค้างไว้
+            if(state.billingSheetUrl) {
+                updateBillingSheetStatusUI('loading');
+                fetch(state.billingSheetUrl + "?action=loadBilling")
+                    .then(res => res.json())
+                    .then(data => {
+                        // ปรับปรุงให้ผสานข้อมูลที่ได้จาก Sheet เข้าสู่ระบบทันทีที่เปิดเว็บ
+                        if (data && data.status === 'success' && data.billingDetails) {
+                            state.billingDetails = { ...state.billingDetails, ...data.billingDetails };
+                            commitToStorage();
+                            renderBillingTable();
+                            renderStatusTable();
+                            updateBillingSheetStatusUI('online');
+                        } else if (data && data.status === 'success') {
+                            updateBillingSheetStatusUI('online'); // กรณีที่มีการเชื่อมต่อสำเร็จแต่ยังไม่มีข้อมูล
+                        } else {
+                            updateBillingSheetStatusUI('offline');
+                        }
+                    }).catch(err => {
+                        updateBillingSheetStatusUI('offline');
+                    });
+            }
+
+            if(state.sheetUrl) {
+                updateSheetStatusUI('loading');
+                try {
+                    const response = await fetch(state.sheetUrl + "?action=load");
+                    const data = await response.json();
+                    if (data && Array.isArray(data.shops)) {
+                        state.shops = data.shops;
+                        updateSheetStatusUI('online');
+                    } else {
+                        updateSheetStatusUI('offline');
+                    }
+                } catch(e) {
+                    updateSheetStatusUI('offline');
+                }
+            }
+            
+            renderAllTables();
+            initReportStats();
+        });
+
+        function renderAllTables() {
+            renderStatusTable();
+            renderBillingTable();
+            renderHistorySearchTable();
+            renderReceiptSelectionTable();
+            renderAdminShopsTable();
+            renderUsersTable();
+        }
+
+        // ==================== AUTHENTICATION & RBAC ====================
+        function handleLogin() {
+            const u = document.getElementById('loginUsername').value.trim();
+            const p = document.getElementById('loginPassword').value.trim();
+            const rememberMe = document.getElementById('loginRememberMe').checked;
+            
+            const user = state.users.find(x => x.username === u && x.password === p);
+            if (user) {
+                state.currentUser = user;
+                localStorage.setItem('market_current_user', JSON.stringify(user));
+                if (rememberMe) {
+                    localStorage.setItem('market_remember_user', u);
+                    localStorage.setItem('market_remember_pass', p);
+                    localStorage.setItem('market_remember_check', 'true');
+                } else {
+                    localStorage.removeItem('market_remember_user');
+                    localStorage.removeItem('market_remember_pass');
+                    localStorage.removeItem('market_remember_check');
+                }
+
+                document.getElementById('globalLoginOverlay').classList.add('hidden');
+                applyPermissions();
+                Swal.fire({ icon: 'success', title: `ยินดีต้อนรับ ${user.name}`, timer: 1200, showConfirmButton: false, background: '#1e1b4b', color: '#fff' });
+            } else {
+                Swal.fire({ icon: 'error', title: 'การเข้าสู่ระบบล้มเหลว', text: 'ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง', background: '#1e1b4b', color: '#fff' });
+            }
+        }
+
+        function handleLogout() {
+            state.currentUser = null;
+            localStorage.removeItem('market_current_user');
+
+            const rememberCheck = localStorage.getItem('market_remember_check');
+            document.getElementById('globalLoginOverlay').classList.remove('hidden');
+
+            if (rememberCheck === 'true') {
+                document.getElementById('loginUsername').value = localStorage.getItem('market_remember_user') || '';
+                document.getElementById('loginPassword').value = localStorage.getItem('market_remember_pass') || '';
+                document.getElementById('loginRememberMe').checked = true;
+            } else {
+                document.getElementById('loginUsername').value = '';
+                document.getElementById('loginPassword').value = '';
+            }
+
+            document.getElementById('mainNav').classList.add('hidden');
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+        }
+
+        function applyPermissions() {
+            document.getElementById('mainNav').classList.remove('hidden');
+            document.getElementById('displayCurrentUser').innerText = `ผู้ใช้งาน: ${state.currentUser.name} (${state.currentUser.role})`;
+            
+            const adminOnlyElements = document.querySelectorAll('.admin-only');
+            
+            if (state.currentUser.role === 'admin') {
+                adminOnlyElements.forEach(el => el.classList.remove('hidden'));
+            } else {
+                adminOnlyElements.forEach(el => el.classList.add('hidden'));
+            }
+            switchTab('tab-status');
+        }
+
+        // RE-SAVING SYSTEM UTILITY
+        function commitToStorage() {
+            localStorage.setItem('market_shops', JSON.stringify(state.shops));
+            localStorage.setItem('market_billing', JSON.stringify(state.billingDetails));
+            localStorage.setItem('market_status', JSON.stringify(state.statusRecords));
+            localStorage.setItem('market_users', JSON.stringify(state.users));
+            autoBackupToSheet();
+        }
+
+        // PAGINATION HELPER
+        function generatePaginationHTML(totalItems, currentPage, funcName) {
+            const totalPages = Math.ceil(totalItems / ITEMS_PER_PAGE);
+            if (totalPages <= 1) return '';
+            
+            let html = '<div class="flex gap-1 overflow-x-auto py-2">';
+            for(let i = 1; i <= totalPages; i++) {
+                let btnClass = i === currentPage ? 'bg-cyan-600 text-white' : 'bg-white/10 text-slate-300 hover:bg-cyan-500/50';
+                html += `<button onclick="${funcName}(${i})" class="px-3 py-1 rounded-lg transition ${btnClass}">${i}</button>`;
+            }
+            html += '</div>';
+            return html;
+        }
+
+        window.setPageStatus = function(p) { currentPageStatus = p; renderStatusTable(); };
+        window.setPageBilling = function(p) { currentPageBilling = p; renderBillingTable(); };
+        window.setPageHistory = function(p) { currentPageHistory = p; renderHistorySearchTable(); };
+        window.setPageAdmin = function(p) { currentPageAdmin = p; renderAdminShopsTable(); };
+        window.setPageReceipt = function(p) { currentPageReceipt = p; renderReceiptSelectionTable(); };
+        
+        // TAB NAVIGATION ANIMATOR ENGINE
+        function switchTab(targetTabId) {
+            if (state.currentUser.role !== 'admin' && (targetTabId === 'tab-report' || targetTabId === 'tab-setting')) {
+                Swal.fire({ icon: 'error', title: 'ไม่มีสิทธิ์เข้าถึง', text: 'เฉพาะผู้ดูแลระบบเท่านั้น', background: '#1e1b4b', color: '#fff' });
+                return;
+            }
+
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+            document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+            
+            document.getElementById(targetTabId).classList.remove('hidden');
+            document.getElementById(`btn-${targetTabId}`).classList.add('active');
+
+            if(targetTabId === 'tab-report') initReportStats();
+        }
+
+        // ==================== ENGINE 1: STATUS MANAGEMENT ====================
+        function renderStatusTable() {
+            const group = document.getElementById('statusGroupFilter').value;
+            const date = document.getElementById('statusDatePicker').value;
+            const tbody = document.getElementById('statusTableBody');
+            tbody.innerHTML = '';
+
+            if(!date) return;
+            const filteredShops = state.shops.filter(s => s.type === group);
+            
+            const startIdx = (currentPageStatus - 1) * ITEMS_PER_PAGE;
+            const paginatedShops = filteredShops.slice(startIdx, startIdx + ITEMS_PER_PAGE);
+
+            paginatedShops.forEach(shop => {
+                const recordKey = `${date}_${shop.id}`;
+                const record = state.statusRecords[recordKey] || { status: 'unpaid', proof: '', locked: false };
+                const bill = state.billingDetails[recordKey] || calculateDefaultBill(shop);
+                let isLocked = record.locked;
+    
+                let lockIconClass = isLocked ? 'fa-lock text-rose-500 text-lg scale-110' : 'fa-unlock text-slate-400 opacity-60';
+
+                let tr = document.createElement('tr');
+                tr.className = 'hover:bg-white/5 transition border-b border-white/5';
+                tr.innerHTML = `
+                    <td class="p-4 font-bold text-cyan-400">${shop.id}</td>
+                    <td class="p-4 font-semibold text-white">${shop.name}</td>
+                    <td class="p-4 text-center">
+                        <div class="inline-flex gap-2">
+                            <label class="flex items-center gap-1 cursor-pointer select-none bg-emerald-500/10 hover:bg-emerald-500/20 px-2.5 py-1 rounded-full border border-emerald-500/30 text-emerald-400 text-xs">
+                                <input type="radio" name="rad_${shop.id}" value="paid" ${record.status === 'paid' ? 'checked' : ''} ${isLocked ? 'disabled' : ''} class="accent-emerald-400"> จ่ายแล้ว
+                            </label>
+                            <label class="flex items-center gap-1 cursor-pointer select-none bg-rose-500/10 hover:bg-rose-500/20 px-2.5 py-1 rounded-full border border-rose-500/30 text-rose-400 text-xs">
+                                <input type="radio" name="rad_${shop.id}" value="unpaid" ${record.status === 'unpaid' ? 'checked' : ''} ${isLocked ? 'disabled' : ''} class="accent-rose-400"> ยังไม่จ่าย
+                            </label>
+                            <label class="flex items-center gap-1 cursor-pointer select-none bg-amber-500/10 hover:bg-amber-500/20 px-2.5 py-1 rounded-full border border-amber-500/30 text-amber-400 text-xs">
+                                <input type="radio" name="rad_${shop.id}" value="pending" ${record.status === 'pending' ? 'checked' : ''} ${isLocked ? 'disabled' : ''} class="accent-amber-400"> ค้างชำระ
+                            </label>
+                        </div>
+                    </td>
+                    <td class="p-4 text-right font-bold text-slate-100">${bill.grandTotal.toLocaleString()} ฿</td>
+                    <td class="p-4 text-center">
+                        <div class="flex items-center justify-center gap-2">
+                            ${record.proof ? `<button onclick="viewProof('${record.proof}')" class="text-xs text-cyan-300 underline font-medium hover:text-cyan-100"><i class="fa-regular fa-image"></i> ดูรูป</button><button onclick="deleteProof('${shop.id}', '${date}')" class="text-xs text-rose-400 underline font-medium hover:text-rose-300 ml-1 ${isLocked ? 'disabled style=display:none;' : ''}"><i class="fa-solid fa-trash-can"></i> ลบ</button>` : ''}
+                            <input type="file" id="file_${shop.id}" accept="image/*" onchange="processProofUpload(event, '${shop.id}')" ${isLocked ? 'hidden' : ''} class="text-[10px] text-slate-400 max-w-[130px] border border-white/10 rounded p-0.5 bg-white/5">
+                        </div>
+                    </td>
+                    <td class="p-4 text-center">
+                        <button onclick="toggleRecordLock('${shop.id}', '${date}', ${isLocked})" class="p-1 transition-all hover:scale-125 focus:outline-none"><i class="fa-solid ${lockIconClass}"></i></button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+
+            document.getElementById('statusPagination').innerHTML = generatePaginationHTML(filteredShops.length, currentPageStatus, 'setPageStatus');
+        }
+
+        function calculateDefaultBill(shop) {
+            return { rent: shop.rent, trash: 0, penalty: 0, other: 0, waterRate: 20, elecRate: 10, waterBefore: 0, waterAfter: 0, waterTotal: 0, elecBefore: 0, elecAfter: 0, elecTotal: 0, grandTotal: shop.rent };
+        }
+
+        function processProofUpload(event, shopId) {
+            const file = event.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const date = document.getElementById('statusDatePicker').value;
+                const recordKey = `${date}_${shopId}`;
+                if (!state.statusRecords[recordKey]) state.statusRecords[recordKey] = { status: 'unpaid', proof: '', locked: false };
+                state.statusRecords[recordKey].proof = e.target.result;
+                commitToStorage();
+                Swal.fire({ icon: 'success', title: 'อัปโหลดหลักฐานเรียบร้อยแล้ว', timer: 1200, showConfirmButton: false, background: '#1e1b4b', color: '#fff' });
+                renderStatusTable();
+            };
+            reader.readAsDataURL(file);
+        }
+
+        function viewProof(base64Data) {
+            Swal.fire({ title: 'รูปภาพหลักฐานการชำระเงิน', imageUrl: base64Data, imageAlt: 'Proof of Payment', background: '#1e1b4b', color: '#fff', confirmButtonColor: '#06b6d4' });
+        }
+        
+        function deleteProof(shopId, date) {
+            Swal.fire({ title: 'ยืนยันการลบรูปหลักฐาน', text: 'หากลบแล้วจะไม่สามารถกู้คืนรูปเดิมได้ ต้องการลบใช่หรือไม่?', icon: 'warning', showCancelButton: true, confirmButtonColor: '#ef4444', cancelButtonColor: '#3b82f6', confirmButtonText: 'ใช่, ลบรูปภาพ', cancelButtonText: 'ยกเลิก', background: '#1e1b4b', color: '#fff' }).then((result) => {
+                if (result.isConfirmed) {
+                    const recordKey = `${date}_${shopId}`;
+                    if (state.statusRecords[recordKey]) {
+                        state.statusRecords[recordKey].proof = '';
+                        commitToStorage();
+                        Swal.fire({ icon: 'success', title: 'ลบรูปหลักฐานเรียบร้อยแล้ว', timer: 1200, showConfirmButton: false, background: '#1e1b4b', color: '#fff' });
+                        renderStatusTable();
+                    }
+                }
+            });
+        }
+
+        function toggleRecordLock(shopId, date, currentLockedState) {
+            if (state.currentUser.role !== 'admin') {
+                Swal.fire({ icon: 'error', title: 'การล็อกข้อมูลสงวนไว้สำหรับ Admin', background: '#1e1b4b', color: '#fff' });
+                return;
+            }
+            const recordKey = `${date}_${shopId}`;
+            if (!state.statusRecords[recordKey]) state.statusRecords[recordKey] = { status: 'unpaid', proof: '', locked: false };
+            if (!currentLockedState) {
+                state.statusRecords[recordKey].locked = true;
+                commitToStorage();
+                Swal.fire({ icon: 'info', title: 'ล็อกข้อมูลรายการนี้เรียบร้อยแล้ว', text: 'ต้องใช้รหัสผ่านเพื่อแก้ไข', timer: 1500, showConfirmButton: false, background: '#1e1b4b', color: '#fff' });
+                renderStatusTable();
+            } else {
+                Swal.fire({ title: 'กรุณากรอกรหัสผ่านเพื่อปลดล็อก', input: 'password', inputPlaceholder: 'ใส่รหัสผ่านกดปุ่มตกลง', showCancelButton: true, confirmButtonText: 'ยืนยัน', cancelButtonText: 'ยกเลิก', background: '#1e1b4b', color: '#fff', confirmButtonColor: '#ef4444' }).then((result) => {
+                    if (result.value === state.currentUser.password) {
+                        state.statusRecords[recordKey].locked = false;
+                        commitToStorage();
+                        Swal.fire({ icon: 'success', title: 'ปลดล็อกเรียบร้อยแล้ว', text: 'สามารถเปลี่ยนสถานะได้ตามปกติ', background: '#1e1b4b', color: '#fff' });
+                        renderStatusTable();
+                    } else if(result.value !== undefined) {
+                        Swal.fire({ icon: 'error', title: 'รหัสผ่านไม่ถูกต้อง', background: '#1e1b4b', color: '#fff' });
+                    }
+                });
+            }
+        }
+
+        function saveStatusData() {
+            const date = document.getElementById('statusDatePicker').value;
+            if(!date) return;
+
+            const group = document.getElementById('statusGroupFilter').value;
+            const filteredShops = state.shops.filter(s => s.type === group);
+            const startIdx = (currentPageStatus - 1) * ITEMS_PER_PAGE;
+            const paginatedShops = filteredShops.slice(startIdx, startIdx + ITEMS_PER_PAGE);
+            paginatedShops.forEach(shop => {
+                const rad = document.querySelector(`input[name="rad_${shop.id}"]:checked`);
+                if (rad) {
+                    const recordKey = `${date}_${shop.id}`;
+                    if (!state.statusRecords[recordKey]) state.statusRecords[recordKey] = { status: 'unpaid', proof: '', locked: false };
+                    if (!state.statusRecords[recordKey].locked) {
+                        state.statusRecords[recordKey].status = rad.value;
+                    }
+                }
+            });
+            commitToStorage();
+            Swal.fire({ icon: 'success', title: 'ระบบทำการบันทึกข้อมูลสำเร็จ', text: 'บันทึกสถานะเรียบร้อยแล้ว', background: '#1e1b4b', color: '#fff', confirmButtonColor: '#06b6d4' });
+            renderStatusTable();
+        }
+
+        // ==================== ENGINE 2: BILLING MANAGEMENT ====================
+        function renderBillingTable() {
+            const date = document.getElementById('statusDatePicker').value;
+            const searchInput = document.getElementById('billingSearchInput');
+            const keyword = searchInput ? searchInput.value.toLowerCase().trim() : '';
+            const groupFilter = document.getElementById('billingGroupFilter');
+            const selectedGroup = groupFilter ? groupFilter.value : 'all';
+            
+            const tbody = document.getElementById('billingTableBody');
+            tbody.innerHTML = '';
+            let filteredShops = state.shops.filter(shop => {
+                if(selectedGroup !== 'all' && shop.type !== selectedGroup) return false;
+                if(keyword && !shop.name.toLowerCase().includes(keyword) && !shop.id.toLowerCase().includes(keyword)) return false;
+                return true;
+            });
+            const startIdx = (currentPageBilling - 1) * ITEMS_PER_PAGE;
+            const paginatedShops = filteredShops.slice(startIdx, startIdx + ITEMS_PER_PAGE);
+            paginatedShops.forEach(shop => {
+                const recordKey = `${date}_${shop.id}`;
+                const bill = state.billingDetails[recordKey] || calculateDefaultBill(shop);
+
+                let tr = document.createElement('tr');
+                tr.className = 'hover:bg-white/5 transition border-b border-white/5 cubic-pointer cursor-pointer';
+                
+                tr.onclick = (e) => {
+                    if(e.target.tagName !== 'BUTTON' && e.target.tagName !== 'I') openBillingModal(shop.id);
+                };
+
+                tr.innerHTML = `
+                    <td class="p-4 text-slate-400 font-bold">${shop.id}</td>
+                    <td class="p-4 font-semibold text-white">${shop.name} <span class="text-[10px] block text-slate-400">${shop.type==='monthly'?'รายเดือน':(shop.type==='weekly'?'รายสัปดาห์':'รายวัน')}</span></td>
+                    <td class="p-4 text-right">${bill.rent.toLocaleString()} ฿</td>
+                    <td class="p-4 text-right text-blue-300">${bill.waterTotal.toLocaleString()} ฿</td>
+                    <td class="p-4 text-right text-amber-300">${bill.elecTotal.toLocaleString()} ฿</td>
+                    <td class="p-4 text-right">${bill.trash.toLocaleString()} ฿</td>
+                    <td class="p-4 text-right">${bill.penalty.toLocaleString()} ฿</td>
+                    <td class="p-4 text-right">${bill.other.toLocaleString()} ฿</td>
+                    <td class="p-4 text-right font-black text-emerald-400 bg-white/5">${bill.grandTotal.toLocaleString()} ฿</td>
+                    <td class="p-4 text-center">
+                        <button onclick="openBillingModal('${shop.id}')" class="bg-cyan-600/30 text-cyan-300 hover:bg-cyan-600 border border-cyan-500/40 text-xs px-3 py-1 rounded-lg transition">
+                            <i class="fa-solid fa-calculator"></i> คำนวณ
+                        </button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+
+            document.getElementById('billingPagination').innerHTML = generatePaginationHTML(filteredShops.length, currentPageBilling, 'setPageBilling');
+        }
+
+        function rolloverAllMeters() {
+            Swal.fire({ title: 'ยืนยันการยกยอดทั้งหมด', text: 'ระบบจะคัดลอกเลขมิเตอร์ครั้งหลังไปเป็นครั้งก่อน สำหรับทุกร้านค้าในรอบบิลวันที่เลือกนี้', icon: 'warning', showCancelButton: true, confirmButtonColor: '#3b82f6', cancelButtonColor: '#ef4444', confirmButtonText: 'ยืนยันยกยอด', cancelButtonText: 'ยกเลิก', background: '#1e1b4b', color: '#fff' }).then((result) => {
+                if (result.isConfirmed) {
+                    const date = document.getElementById('statusDatePicker').value;
+                    state.shops.forEach(shop => {
+                        const recordKey = `${date}_${shop.id}`;
+                        let bill = state.billingDetails[recordKey] || calculateDefaultBill(shop);
+                        bill.prevWaterBefore = bill.waterBefore; bill.prevWaterAfter = bill.waterAfter; bill.prevElecBefore = bill.elecBefore; bill.prevElecAfter = bill.elecAfter;
+                        bill.waterBefore = bill.waterAfter;
+                        bill.waterAfter = 0;
+                        bill.elecBefore = bill.elecAfter; bill.elecAfter = 0;
+                        bill.waterTotal = 0; bill.elecTotal = 0;
+                        bill.grandTotal = bill.rent + bill.trash + bill.waterTotal + bill.elecTotal + bill.penalty + bill.other;
+                        state.billingDetails[recordKey] = bill;
+                    });
+                    commitToStorage();
+                    renderBillingTable(); renderStatusTable();
+                    autoBackupBillingToSheet();
+                    Swal.fire({ icon: 'success', title: 'ดำเนินการยกยอดสำเร็จ', timer: 1500, showConfirmButton: false, background: '#1e1b4b', color: '#fff' });
+                }
+            });
+        }
+
+        function undoRolloverAllMeters() {
+            Swal.fire({ title: 'ยืนยันการถอยหลัง', text: 'ระบบจะคืนค่าเลขมิเตอร์กลับไปเป็นค่าเดิมก่อนที่จะกดยกยอด', icon: 'warning', showCancelButton: true, confirmButtonColor: '#f59e0b', cancelButtonColor: '#ef4444', confirmButtonText: 'ยืนยันถอยหลัง', cancelButtonText: 'ยกเลิก', background: '#1e1b4b', color: '#fff' }).then((result) => {
+                if (result.isConfirmed) {
+                    const date = document.getElementById('statusDatePicker').value;
+                    let undoCount = 0;
+                    state.shops.forEach(shop => {
+                        const recordKey = `${date}_${shop.id}`;
+                        let bill = state.billingDetails[recordKey];
+                        if (bill && bill.prevWaterBefore !== undefined) {
+                            bill.waterBefore = bill.prevWaterBefore; bill.waterAfter = bill.prevWaterAfter; bill.elecBefore = bill.prevElecBefore; bill.elecAfter = bill.prevElecAfter;
+                            bill.waterTotal = (bill.waterAfter - bill.waterBefore) > 0 ? (bill.waterAfter - bill.waterBefore) * (bill.waterRate || 20) : 0;
+                            bill.elecTotal = (bill.elecAfter - bill.elecBefore) > 0 ? (bill.elecAfter - bill.elecBefore) * (bill.elecRate || 10) : 0;
+                            bill.grandTotal = bill.rent + bill.trash + bill.waterTotal + bill.elecTotal + bill.penalty + bill.other;
+                            undoCount++;
+                        }
+                    });
+                    if (undoCount > 0) {
+                        commitToStorage();
+                        renderBillingTable(); renderStatusTable();
+                        autoBackupBillingToSheet();
+                        Swal.fire({ icon: 'success', title: 'ถอยหลังข้อมูลสำเร็จ', text: `คืนค่าข้อมูลจำนวน ${undoCount} ร้านค้า`, timer: 1500, showConfirmButton: false, background: '#1e1b4b', color: '#fff' });
+                    } else {
+                        Swal.fire({ icon: 'info', title: 'ไม่มีข้อมูลให้ถอยหลัง', text: 'ไม่พบประวัติการยกยอดในรอบบิลนี้', background: '#1e1b4b', color: '#fff' });
+                    }
+                }
+            });
+        }
+
+        function openBillingModal(shopId) {
+            const date = document.getElementById('statusDatePicker').value;
+            const shop = state.shops.find(s => s.id === shopId);
+            if(!shop) return;
+            const recordKey = `${date}_${shopId}`;
+            const bill = state.billingDetails[recordKey] || calculateDefaultBill(shop);
+            document.getElementById('modalShopId').value = shopId;
+            document.getElementById('modalShopName').innerText = `[${shop.id}] ${shop.name}`;
+            document.getElementById('inputRent').value = bill.rent; document.getElementById('inputTrash').value = bill.trash;
+            document.getElementById('inputWaterRate').value = bill.waterRate !== undefined ? bill.waterRate : 20;
+            document.getElementById('inputElecRate').value = bill.elecRate !== undefined ? bill.elecRate : 10;
+            document.getElementById('inputWaterBefore').value = bill.waterBefore; document.getElementById('inputWaterAfter').value = bill.waterAfter;
+            document.getElementById('inputElecBefore').value = bill.elecBefore; document.getElementById('inputElecAfter').value = bill.elecAfter;
+            document.getElementById('inputPenalty').value = bill.penalty; document.getElementById('inputOther').value = bill.other;
+            calcModalWater(); calcModalElec(); updateModalGrandTotal();
+            document.getElementById('billingModal').classList.remove('hidden');
+        }
+
+        function closeBillingModal() { document.getElementById('billingModal').classList.add('hidden'); }
+
+        function calcModalWater() { let rate = parseFloat(document.getElementById('inputWaterRate').value) || 0;
+            let b = parseFloat(document.getElementById('inputWaterBefore').value) || 0; let a = parseFloat(document.getElementById('inputWaterAfter').value) || 0;
+            let total = (a - b) > 0 ? (a - b) * rate : 0; document.getElementById('textWaterTotal').innerText = total.toLocaleString(); updateModalGrandTotal();
+        }
+        function calcModalElec() { let rate = parseFloat(document.getElementById('inputElecRate').value) || 0;
+            let b = parseFloat(document.getElementById('inputElecBefore').value) || 0; let a = parseFloat(document.getElementById('inputElecAfter').value) || 0;
+            let total = (a - b) > 0 ? (a - b) * rate : 0; document.getElementById('textElecTotal').innerText = total.toLocaleString(); updateModalGrandTotal();
+        }
+        function updateModalGrandTotal() { let rent = parseFloat(document.getElementById('inputRent').value) || 0;
+            let trash = parseFloat(document.getElementById('inputTrash').value) || 0; let penalty = parseFloat(document.getElementById('inputPenalty').value) || 0; let other = parseFloat(document.getElementById('inputOther').value) || 0;
+            let wRate = parseFloat(document.getElementById('inputWaterRate').value) || 0; let wb = parseFloat(document.getElementById('inputWaterBefore').value) || 0; let wa = parseFloat(document.getElementById('inputWaterAfter').value) || 0;
+            let waterTotal = (wa - wb) > 0 ? (wa - wb) * wRate : 0;
+            let eRate = parseFloat(document.getElementById('inputElecRate').value) || 0; let eb = parseFloat(document.getElementById('inputElecBefore').value) || 0; let ea = parseFloat(document.getElementById('inputElecAfter').value) || 0;
+            let elecTotal = (ea - eb) > 0 ? (ea - eb) * eRate : 0;
+            let grandTotal = rent + trash + waterTotal + elecTotal + penalty + other;
+            document.getElementById('textModalGrandTotal').innerText = grandTotal.toLocaleString('th-TH', { minimumFractionDigits: 2 }) + ' ฿';
+        }
+
+        function saveModalBilling() {
+            const date = document.getElementById('statusDatePicker').value;
+            const shopId = document.getElementById('modalShopId').value;
+            const recordKey = `${date}_${shopId}`;
+            let rent = parseFloat(document.getElementById('inputRent').value) || 0; let trash = parseFloat(document.getElementById('inputTrash').value) || 0;
+            let waterRate = parseFloat(document.getElementById('inputWaterRate').value) || 0; let wb = parseFloat(document.getElementById('inputWaterBefore').value) || 0; let wa = parseFloat(document.getElementById('inputWaterAfter').value) || 0;
+            let waterTotal = (wa - wb) > 0 ? (wa - wb) * waterRate : 0;
+            let elecRate = parseFloat(document.getElementById('inputElecRate').value) || 0; let eb = parseFloat(document.getElementById('inputElecBefore').value) || 0; let ea = parseFloat(document.getElementById('inputElecAfter').value) || 0;
+            let elecTotal = (ea - eb) > 0 ? (ea - eb) * elecRate : 0;
+            let penalty = parseFloat(document.getElementById('inputPenalty').value) || 0; let other = parseFloat(document.getElementById('inputOther').value) || 0;
+            let grandTotal = rent + trash + waterTotal + elecTotal + penalty + other;
+            let existingBill = state.billingDetails[recordKey];
+            state.billingDetails[recordKey] = { rent, trash, penalty, other, waterRate, elecRate, waterBefore: wb, waterAfter: wa, waterTotal, elecBefore: eb, elecAfter: ea, elecTotal, grandTotal, prevWaterBefore: existingBill ? existingBill.prevWaterBefore : undefined, prevWaterAfter: existingBill ? existingBill.prevWaterAfter : undefined, prevElecBefore: existingBill ? existingBill.prevElecBefore : undefined, prevElecAfter: existingBill ? existingBill.prevElecAfter : undefined };
+            
+            commitToStorage(); 
+            closeBillingModal(); 
+            autoBackupBillingToSheet(); // <-- ซิงค์ Google Sheet อัตโนมัติ
+
+            Swal.fire({ icon: 'success', title: 'บันทึกสูตรการคำนวณเงินสำเร็จ', text: `ยอดรวม ${grandTotal.toLocaleString()} บาท`, timer: 1500, showConfirmButton: false, background: '#1e1b4b', color: '#fff' });
+            renderBillingTable(); renderStatusTable();
+        }
+
+        function exportBillingToExcel() {
+            const date = document.getElementById('statusDatePicker').value;
+            let dataRows = [];
+            state.shops.forEach(shop => {
+                const bill = state.billingDetails[`${date}_${shop.id}`] || calculateDefaultBill(shop);
+                dataRows.push({ 
+                    'วันที่': date, 
+                    'รหัสร้านค้า': shop.id, 
+                    'ชื่อร้านค้า': shop.name, 
+                    'ประเภทกลุ่ม': shop.type === 'monthly' ? 'รายเดือน' : (shop.type === 'weekly' ? 'รายสัปดาห์' : 'รายวัน'), 
+                    'ค่าเช่าล็อก': bill.rent, 
+                    'มิเตอร์ครั้งก่อนน้ำ': bill.waterBefore,
+                    'มิเตอร์ครั้งหลังน้ำ': bill.waterAfter,
+                    'ค่าน้ำประปา': bill.waterTotal, 
+                    'มิเตอร์ครั้งก่อนไฟ': bill.elecBefore,
+                    'มิเตอร์ครั้งหลังไฟ': bill.elecAfter,
+                    'ค่าไฟฟ้า': bill.elecTotal, 
+                    'ค่าขยะ': bill.trash, 
+                    'ค่าปรับล่าช้า': bill.penalty, 
+                    'อื่นๆ': bill.other, 
+                    'รวมยอดสุทธิ': bill.grandTotal 
+                });
+            });
+            const ws = XLSX.utils.json_to_sheet(dataRows); const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "Billing_" + date); XLSX.writeFile(wb, `ใบสรุปรายการเงินตลาดสด_${date}.xlsx`);
+        }
+
+        // ==================== ENGINE 3: SEARCH & HISTORY ====================
+        function renderHistorySearchTable() {
+            const keyword = document.getElementById('historySearchInput').value.toLowerCase().trim();
+            const group = document.getElementById('historyGroupFilter').value;
+            const tbody = document.getElementById('historySearchTableBody');
+            tbody.innerHTML = '';
+            let filteredShops = state.shops.filter(shop => {
+                if(group !== 'all' && shop.type !== group) return false;
+                if(keyword && !shop.name.toLowerCase().includes(keyword) && !shop.id.toLowerCase().includes(keyword)) return false;
+                return true;
+            });
+            const startIdx = (currentPageHistory - 1) * ITEMS_PER_PAGE;
+            const paginatedShops = filteredShops.slice(startIdx, startIdx + ITEMS_PER_PAGE);
+            paginatedShops.forEach(shop => {
+                let tr = document.createElement('tr');
+                tr.className = 'hover:bg-white/5 transition border-b border-white/5';
+                tr.innerHTML = `
+                    <td class="p-4 font-bold text-cyan-400">${shop.id}</td>
+                    <td class="p-4 font-semibold text-white">${shop.name}</td>
+                    <td class="p-4 capitalize text-slate-300">${shop.type === 'monthly' ? 'รายเดือน' : (shop.type === 'weekly' ? 'รายสัปดาห์' : 'รายวัน')}</td>
+                    <td class="p-4 text-right font-bold text-slate-100">${shop.rent.toLocaleString()} ฿</td>
+                    <td class="p-4 text-center">
+                        <button onclick="openHistoryPopup('${shop.id}')" class="bg-amber-500/20 text-amber-300 hover:bg-amber-500 border border-amber-500/30 rounded-xl p-2 px-4 transition-all">
+                            <i class="fa-solid fa-clock-rotate-left"></i> เรียกประวัติ
+                        </button>
+                    </td>
+                 `;
+                tbody.appendChild(tr);
+            });
+            document.getElementById('historyPagination').innerHTML = generatePaginationHTML(filteredShops.length, currentPageHistory, 'setPageHistory');
+        }
+
+        function openHistoryPopup(shopId) {
+            const shop = state.shops.find(s => s.id === shopId);
+            if(!shop) return;
+            document.getElementById('popupShopTitle').innerText = `[${shop.id}] ${shop.name}`;
+            const tbody = document.getElementById('historyPopupTableBody');
+            tbody.innerHTML = '';
+            
+            let keys = Object.keys(state.statusRecords).filter(k => k.endsWith(`_${shopId}`));
+            if(keys.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="7" class="p-8 text-center text-slate-400 italic">ไม่พบประวัติการชำระเงินในระบบความปลอดภัย</td></tr>`;
+            } else {
+                keys.sort().reverse();
+                keys.forEach(key => {
+                    let datePart = key.split('_')[0]; let rec = state.statusRecords[key]; let b = state.billingDetails[key] || calculateDefaultBill(shop);
+                    let badge = '';
+                    if(rec.status === 'paid') badge = `<span class="bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 px-2 py-0.5 rounded-full">✅จ่ายแล้ว</span>`; else if(rec.status === 'unpaid') badge = `<span class="bg-rose-500/20 border border-rose-500/40 text-rose-300 px-2 py-0.5 rounded-full">❌ ยังไม่จ่าย</span>`; else badge = `<span class="bg-amber-500/20 border border-amber-500/40 text-amber-300 px-2 py-0.5 rounded-full">📝ค้างชำระ</span>`;
+                    let tr = document.createElement('tr'); tr.className = 'hover:bg-white/5 border-b border-white/5';
+                    tr.innerHTML = `<td class="p-3 font-semibold text-cyan-300">${datePart}</td><td class="p-3 text-center">${badge}</td><td class="p-3 text-right">${b.rent.toLocaleString()}</td><td class="p-3 text-right">${(b.waterTotal + b.elecTotal).toLocaleString()}</td><td class="p-3 text-right">${(b.trash + b.penalty + b.other).toLocaleString()}</td><td class="p-3 text-right font-bold text-white bg-white/5">${b.grandTotal.toLocaleString()} ฿</td><td class="p-3 text-center">${rec.proof ? `<button onclick="viewProof('${rec.proof}')" class="text-amber-300 underline"><i class="fa-regular fa-image"></i> ใบเสร็จ</button>` : '<span class="opacity-30">-</span>'}</td>`;
+                    tbody.appendChild(tr);
+                });
+            }
+            document.getElementById('historyPopupModal').classList.remove('hidden');
+        }
+        function closeHistoryPopup() { document.getElementById('historyPopupModal').classList.add('hidden'); }
+
+        // ==================== ENGINE 4: REPORT & STATS ====================
+        let myPieChartInstance = null;
+        function initReportStats() {
+            let totalPaid = 0, totalPending = 0, totalUnpaid = 0, paidCount = 0, pendingCount = 0, unpaidCount = 0;
+            Object.keys(state.statusRecords).forEach(key => {
+                let rec = state.statusRecords[key]; let b = state.billingDetails[key]; let amt = b ? b.grandTotal : 0;
+                if (rec.status === 'paid') { totalPaid += amt; paidCount++; } else if (rec.status === 'pending') { totalPending += amt; pendingCount++; } else { totalUnpaid += amt; unpaidCount++; }
+            });
+            document.getElementById('statPaidAmt').innerText = totalPaid.toLocaleString('th-TH') + ' ฿'; document.getElementById('statPendingAmt').innerText = totalPending.toLocaleString('th-TH') + ' ฿'; document.getElementById('statUnpaidAmt').innerText = totalUnpaid.toLocaleString('th-TH') + ' ฿';
+            const ctx = document.getElementById('statusPieChart').getContext('2d');
+            if (myPieChartInstance) myPieChartInstance.destroy();
+            let chartData = [paidCount, pendingCount, unpaidCount];
+            if(paidCount===0 && pendingCount===0 && unpaidCount===0) chartData = [1, 0, 0];
+            myPieChartInstance = new Chart(ctx, { type: 'doughnut', data: { labels: ['จ่ายแล้ว', 'ค้างชำระ', 'ยังไม่จ่าย'], datasets: [{ data: chartData, backgroundColor: ['#10b981', '#f59e0b', '#f43f5e'], borderWidth: 0 }] }, options: { plugins: { legend: { display: false } }, responsive: true, maintainAspectRatio: false } });
+            let datesMap = {};
+            Object.keys(state.statusRecords).forEach(key => {
+                let d = key.split('_')[0]; let rec = state.statusRecords[key]; let b = state.billingDetails[key]; let amt = b ? b.grandTotal : 0;
+                if(!datesMap[d]) datesMap[d] = { paid: 0, pending: 0, unpaid: 0, totalSum: 0 };
+                if(rec.status === 'paid') { datesMap[d].paid++; datesMap[d].totalSum += amt; } else if(rec.status === 'pending') { datesMap[d].pending++; datesMap[d].totalSum += amt; } else { datesMap[d].unpaid++; datesMap[d].totalSum += amt; }
+            });
+            const tbody = document.getElementById('reportTableBody'); tbody.innerHTML = '';
+            let sortedDates = Object.keys(datesMap).sort().reverse();
+            if(sortedDates.length === 0) { tbody.innerHTML = `<tr><td colspan="5" class="p-4 text-center text-slate-400 italic">ไม่มีข้อมูลการทำธุรกรรมในระบบบันทึกคลัง</td></tr>`;
+            } else {
+                sortedDates.forEach(d => {
+                    let r = datesMap[d]; let tr = document.createElement('tr'); tr.className = 'hover:bg-white/5 border-b border-white/5';
+                    tr.innerHTML = `<td class="p-3 font-bold text-purple-300">${d}</td><td class="p-3 text-emerald-400 font-semibold text-center">${r.paid}</td><td class="p-3 text-amber-400 font-semibold text-center">${r.pending}</td><td class="p-3 text-rose-400 font-semibold text-center">${r.unpaid}</td><td class="p-3 text-right font-black text-slate-200">${r.totalSum.toLocaleString()} ฿</td>`;
+                    tbody.appendChild(tr);
+                });
+            }
+        }
+
+        function exportReportToExcel() {
+            let reports = [];
+            Object.keys(state.statusRecords).forEach(key => {
+                let parts = key.split('_'); let d = parts[0]; let id = parts[1]; let s = state.shops.find(x => x.id === id) || { name: 'Unknown' }; let rec = state.statusRecords[key]; let b = state.billingDetails[key] || { grandTotal: 0 };
+                reports.push({ 'วันที่บันทึก': d, 'รหัสร้าน': id, 'ชื่อร้านค้า': s.name, 'สถานะ': rec.status === 'paid' ? 'จ่ายแล้ว' : rec.status === 'pending' ? 'ค้างชำระ' : 'ยังไม่จ่าย', 'ยอดเรียกเก็บทั้งสิ้น': b.grandTotal });
+            });
+            const ws = XLSX.utils.json_to_sheet(reports); const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "Financial_Report"); XLSX.writeFile(wb, `รายงานวิเคราะห์ภาพรวมตลาดสด.xlsx`);
+        }
+
+        // ==================== ENGINE 5: ADMIN & SETTINGS ====================
+        function switchSubSetting(sub) {
+            document.getElementById('admin-sub-general').classList.add('hidden');
+            document.getElementById('admin-sub-shops').classList.add('hidden');
+            document.getElementById('admin-sub-users').classList.add('hidden');
+            document.getElementById('subtab-btn-general').className = "text-sm font-semibold border-b-2 border-transparent pb-2 text-slate-400 hover:text-white px-2 whitespace-nowrap";
+            document.getElementById('subtab-btn-shops').className = "text-sm font-semibold border-b-2 border-transparent pb-2 text-slate-400 hover:text-white px-2 whitespace-nowrap";
+            document.getElementById('subtab-btn-users').className = "text-sm font-semibold border-b-2 border-transparent pb-2 text-slate-400 hover:text-white px-2 whitespace-nowrap";
+            if (sub === 'general') {
+                document.getElementById('admin-sub-general').classList.remove('hidden');
+                document.getElementById('subtab-btn-general').className = "text-sm font-semibold border-b-2 border-rose-500 pb-2 text-rose-300 px-2 whitespace-nowrap";
+            } else if (sub === 'shops') {
+                document.getElementById('admin-sub-shops').classList.remove('hidden');
+                document.getElementById('subtab-btn-shops').className = "text-sm font-semibold border-b-2 border-rose-500 pb-2 text-rose-300 px-2 whitespace-nowrap";
+                renderAdminShopsTable();
+            } else {
+                document.getElementById('admin-sub-users').classList.remove('hidden');
+                document.getElementById('subtab-btn-users').className = "text-sm font-semibold border-b-2 border-rose-500 pb-2 text-rose-300 px-2 whitespace-nowrap";
+                renderUsersTable();
+            }
+        }
+
+        function renderUsersTable() {
+            const tbody = document.getElementById('usersTableBody');
+            tbody.innerHTML = '';
+            state.users.forEach((u, idx) => {
+                let badge = u.role === 'admin' ? '<span class="bg-rose-500/20 text-rose-300 px-2 py-0.5 rounded-lg text-xs">Admin</span>' : '<span class="bg-cyan-500/20 text-cyan-300 px-2 py-0.5 rounded-lg text-xs">Staff</span>';
+                let tr = document.createElement('tr');
+                tr.className = 'hover:bg-white/5 border-b border-white/5';
+                tr.innerHTML = `
+                    <td class="p-3 font-semibold text-white">${u.username}</td>
+                    <td class="p-3 text-slate-300">${u.name}</td>
+                    <td class="p-3">${badge}</td>
+                    <td class="p-3 text-center">
+                        <button onclick="deleteUser(${idx})" class="bg-rose-500/20 text-rose-400 px-3 py-1 rounded hover:bg-rose-600 hover:text-white transition"><i class="fa-solid fa-trash"></i></button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        function addUser() {
+            const u = document.getElementById('userFormUsername').value.trim();
+            const n = document.getElementById('userFormName').value.trim();
+            const p = document.getElementById('userFormPassword').value.trim();
+            const r = document.getElementById('userFormRole').value;
+            if(!u || !p || !n) return Swal.fire({ icon: 'warning', title: 'กรุณากรอกข้อมูลผู้ใช้ให้ครบ', background: '#1e1b4b', color: '#fff' });
+            if(state.users.find(x => x.username === u)) return Swal.fire({ icon: 'error', title: 'มี Username นี้แล้ว', background: '#1e1b4b', color: '#fff' });
+            state.users.push({ username: u, name: n, password: p, role: r });
+            commitToStorage();
+            
+            document.getElementById('userFormUsername').value = '';
+            document.getElementById('userFormName').value = '';
+            document.getElementById('userFormPassword').value = '';
+            renderUsersTable();
+            Swal.fire({ icon: 'success', title: 'เพิ่มผู้ใช้งานสำเร็จ', background: '#1e1b4b', color: '#fff' });
+        }
+
+        function deleteUser(idx) {
+            if(state.users[idx].username === state.currentUser.username) {
+                return Swal.fire({ icon: 'error', title: 'ไม่สามารถลบบัญชีตัวเองได้', background: '#1e1b4b', color: '#fff' });
+            }
+            state.users.splice(idx, 1);
+            commitToStorage();
+            renderUsersTable();
+        }
+
+        function updateSystemName() { const newName = document.getElementById('settingSystemName').value.trim(); if(!newName) return; state.systemName = newName;
+            localStorage.setItem('market_sysName', newName); document.getElementById('displaySystemName').innerText = newName; Swal.fire({ icon: 'success', title: 'อัปเดตชื่อระบบหลักเรียบร้อย', timer: 1000, showConfirmButton: false, background: '#1e1b4b', color: '#fff' });
+        }
+        
+        function generateNextShopId(type) {
+            const prefix = type === 'monthly' ? 'A' : (type === 'weekly' ? 'C' : 'B');
+            const filtered = state.shops.filter(s => s.id.startsWith(prefix));
+            if(filtered.length === 0) return prefix + '001';
+            let maxNum = 0;
+            filtered.forEach(s => { let num = parseInt(s.id.substring(1)) || 0; if(num > maxNum) maxNum = num; });
+            return prefix + (maxNum + 1).toString().padStart(3, '0');
+        }
+
+        function renderAdminShopsTable() {
+            const tbody = document.getElementById('adminShopsTableBody');
+            tbody.innerHTML = '';
+
+            const searchInput = document.getElementById('adminShopSearchInput');
+            const keyword = searchInput ? searchInput.value.toLowerCase().trim() : '';
+            const groupFilter = document.getElementById('adminShopGroupFilter');
+            const selectedGroup = groupFilter ? groupFilter.value : 'all';
+
+            let filteredShops = state.shops.filter(shop => {
+                if (selectedGroup !== 'all' && shop.type !== selectedGroup) return false;
+                if (keyword && !shop.name.toLowerCase().includes(keyword) && !shop.id.toLowerCase().includes(keyword)) return false;
+                return true;
+            });
+            const startIdx = (currentPageAdmin - 1) * ITEMS_PER_PAGE;
+            const paginatedShops = filteredShops.slice(startIdx, startIdx + ITEMS_PER_PAGE);
+            paginatedShops.forEach((shop, relativeIndex) => {
+                let actualIndex = state.shops.findIndex(s => s.id === shop.id);
+                let isLocked = shop.isLocked || false;
+                let tr = document.createElement('tr'); tr.className = 'hover:bg-white/5 border-b border-white/5';
+                tr.innerHTML = `
+                    <td class="p-3 text-center"><input type="checkbox" class="shop-select-cb w-4 h-4 accent-rose-400 cursor-pointer" value="${shop.id}" ${isLocked ? 'disabled' : ''}></td>
+                    <td class="p-3 font-bold text-rose-400">${shop.id}</td>
+                    <td class="p-3 font-semibold text-white">${shop.name}</td>
+                    <td class="p-3 text-slate-300">${shop.type === 'monthly' ? 'รายเดือน (A)' : (shop.type === 'weekly' ? 'รายสัปดาห์ (C)' : 'รายวัน (B)')}</td>
+                    <td class="p-3 text-right font-bold">${shop.rent.toLocaleString()} ฿</td>
+                    <td class="p-3 text-center space-x-1">
+                        <button onclick="toggleShopLock('${actualIndex}')" class="${isLocked ? 'bg-slate-500/20 text-slate-400' : 'bg-emerald-500/20 text-emerald-300'} px-2 py-1 rounded hover:opacity-80 transition" title="ล๊อคไม่ให้แก้ไขหรือลบ"><i class="fa-solid ${isLocked ? 'fa-lock' : 'fa-unlock'}"></i></button>
+                        <button onclick="editShop('${actualIndex}')" class="bg-amber-500/20 text-amber-300 px-2 py-1 rounded hover:bg-amber-500 hover:text-white transition" ${isLocked ? 'disabled style="opacity:0.4; cursor:not-allowed;"' : ''}><i class="fa-solid fa-pen-to-square"></i> แก้ไข</button>
+                        <button onclick="deleteShop('${actualIndex}')" class="bg-rose-500/20 text-rose-400 px-2 py-1 rounded hover:bg-rose-600 hover:text-white transition" ${isLocked ? 'disabled style="opacity:0.4; cursor:not-allowed;"' : ''}><i class="fa-solid fa-trash"></i> ลบ</button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+            const selectAllCb = document.getElementById('selectAllShops'); if(selectAllCb) selectAllCb.checked = false;
+            
+            document.getElementById('adminPagination').innerHTML = generatePaginationHTML(filteredShops.length, currentPageAdmin, 'setPageAdmin');
+        }
+
+        function toggleShopLock(index) {
+            state.shops[index].isLocked = !state.shops[index].isLocked; commitToStorage(); renderAdminShopsTable();
+            Swal.fire({ icon: 'success', title: state.shops[index].isLocked ? 'ล็อกร้านค้าสำเร็จ' : 'ปลดล็อกร้านค้าเรียบร้อย', text: state.shops[index].isLocked ? 'ร้านค้านี้จะไม่สามารถแก้ไข/ลบได้' : 'สามารถแก้ไขข้อมูลได้ตามปกติ', timer: 1500, showConfirmButton: false, background: '#1e1b4b', color: '#fff' });
+        }
+       
+        function toggleSelectAllShops(source) { const checkboxes = document.querySelectorAll('.shop-select-cb:not(:disabled)');
+            checkboxes.forEach(cb => cb.checked = source.checked);
+        }
+        function deleteSelectedShops() {
+            const selectedCbs = document.querySelectorAll('.shop-select-cb:checked');
+            if (selectedCbs.length === 0) { Swal.fire({ icon: 'warning', title: 'ยังไม่ได้เลือกรายการ', background: '#1e1b4b', color: '#fff' }); return;
+            }
+            const selectedIds = Array.from(selectedCbs).map(cb => cb.value);
+            Swal.fire({ title: `ยืนยันการลบ ${selectedIds.length} รายการ`, icon: 'warning', showCancelButton: true, confirmButtonColor: '#d33', cancelButtonColor: '#3085d6', confirmButtonText: 'ใช่, ฉันต้องการลบ', cancelButtonText: 'ยกเลิก', background: '#1e1b4b', color: '#fff' }).then((result) => {
+                if (result.isConfirmed) { state.shops = state.shops.filter(shop => !selectedIds.includes(shop.id) || shop.isLocked); commitToStorage(); Swal.fire({ icon: 'success', title: 'ลบข้อมูลสำเร็จ', background: '#1e1b4b', color: '#fff' }); renderAllTables(); }
+            });
+        }
+        function saveShopForm() {
+            const name = document.getElementById('shopFormName').value.trim();
+            const type = document.getElementById('shopFormType').value; const rent = parseFloat(document.getElementById('shopFormRent').value) || 0; const editIndex = parseInt(document.getElementById('shopEditIndex').value);
+            if(!name) { Swal.fire({ icon: 'warning', title: 'กรุณากรอกชื่อร้านค้าให้สมบูรณ์', background: '#1e1b4b', color: '#fff' }); return;
+            }
+            if(editIndex === -1) {
+                const newId = generateNextShopId(type);
+                state.shops.push({ id: newId, name, type, rent, isLocked: false }); Swal.fire({ icon: 'success', title: 'เพิ่มข้อมูลร้านค้ารหัสใหม่สำเร็จ', text: `รหัสอัตโนมัติ ${newId}`, background: '#1e1b4b', color: '#fff' });
+            } else {
+                let oldShop = state.shops[editIndex];
+                let targetId = oldShop.id; if(oldShop.type !== type) { targetId = generateNextShopId(type);
+                }
+                state.shops[editIndex] = { id: targetId, name, type, rent, isLocked: oldShop.isLocked || false }; Swal.fire({ icon: 'success', title: 'ปรับปรุงแก้ไขข้อมูลร้านค้าเรียบร้อย', background: '#1e1b4b', color: '#fff' });
+            }
+            commitToStorage(); clearShopForm(); renderAllTables();
+        }
+        function editShop(index) { let shop = state.shops[index]; if(shop.isLocked) return; document.getElementById('shopEditIndex').value = index;
+            document.getElementById('shopFormName').value = shop.name; document.getElementById('shopFormType').value = shop.type; document.getElementById('shopFormRent').value = shop.rent; }
+        function deleteShop(index) {
+            let shop = state.shops[index];
+            if(shop.isLocked) return;
+            Swal.fire({ title: `ยืนยันการลบ`, text: `ลบร้าน [${shop.id}] ${shop.name} หรือไม่`, icon: 'warning', showCancelButton: true, confirmButtonColor: '#d33', cancelButtonColor: '#3085d6', confirmButtonText: 'ลบ', cancelButtonText: 'ยกเลิก', background: '#1e1b4b', color: '#fff' }).then((result) => {
+                if (result.isConfirmed) { state.shops.splice(index, 1); commitToStorage(); Swal.fire({ icon: 'success', title: 'ลบเสร็จสิ้น', background: '#1e1b4b', color: '#fff' }); renderAllTables(); }
+            });
+        }
+        function clearShopForm() { document.getElementById('shopEditIndex').value = -1; document.getElementById('shopFormName').value = ''; document.getElementById('shopFormRent').value = '0';
+        }
+        
+        function exportShopsToExcel() { const ws = XLSX.utils.json_to_sheet(state.shops);
+            const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "Shops_Database"); XLSX.writeFile(wb, "ฐานข้อมูลร้านค้าตลาดสด_Backup.xlsx"); }
+        function importShopsFromExcel(e) {
+            const file = e.target.files[0];
+            if(!file) return; const reader = new FileReader();
+            reader.onload = function(evt) {
+                const wb = XLSX.read(evt.target.result, { type: 'binary' });
+                const ws = wb.Sheets[wb.SheetNames[0]]; const importedData = XLSX.utils.sheet_to_json(ws);
+                if (importedData.length > 0 && importedData[0].id && importedData[0].name) { state.shops = importedData;
+                    commitToStorage(); Swal.fire({ icon: 'success', title: 'นำเข้าข้อมูลร้านค้าสำเร็จ', text: `โหลดเสร็จสิ้นจำนวน ${importedData.length} ร้านค้า`, background: '#1e1b4b', color: '#fff' }); renderAllTables();
+                } else { Swal.fire({ icon: 'error', title: 'โครงสร้างไฟล์ไม่ถูกต้อง', text: 'ไฟล์ Excel ต้องมีคอลัมน์ id, name, type, rent', background: '#1e1b4b', color: '#fff' });
+                }
+            }; reader.readAsBinaryString(file);
+        }
+
+        // ==================== ENGINE 6: RECEIPT PRINT & BATCH ====================
+        let selectedReceiptShops = [];
+        function uploadQRImage(e) { const file = e.target.files[0]; if (!file) return; const reader = new FileReader();
+            reader.onload = function(evt) { state.qrImage = evt.target.result; localStorage.setItem('market_qrCode', state.qrImage); Swal.fire({ icon: 'success', title: 'บันทึกรูปภาพ QR Code สแกนจ่ายใหม่สำเร็จ', timer: 1500, showConfirmButton: false, background: '#1e1b4b', color: '#fff' });
+            }; reader.readAsDataURL(file); }
+
+        function renderReceiptSelectionTable() {
+            const date = document.getElementById('receiptDatePicker').value;
+            const group = document.getElementById('receiptGroupFilter').value;
+            const tbody = document.getElementById('receiptSelectionTableBody');
+            tbody.innerHTML = '';
+            if(!date) return;
+            let filteredShops = state.shops.filter(s => group === 'all' || s.type === group);
+            const startIdx = (currentPageReceipt - 1) * ITEMS_PER_PAGE;
+            const paginatedShops = filteredShops.slice(startIdx, startIdx + ITEMS_PER_PAGE);
+
+            paginatedShops.forEach(shop => {
+                const recordKey = `${date}_${shop.id}`;
+                const rec = state.statusRecords[recordKey] || { status: 'unpaid' };
+                const bill = state.billingDetails[recordKey] || calculateDefaultBill(shop);
+                const isChecked = selectedReceiptShops.includes(shop.id) ? 'checked' : '';
+    
+                let statusBadge = rec.status === 'paid' ? '<span class="text-emerald-400 font-medium">จ่ายแล้ว</span>' : rec.status === 'pending' ? '<span class="text-amber-400 font-medium">ค้างชำระ</span>' : '<span class="text-rose-400 font-medium">ยังไม่ชำระ</span>';
+
+                let tr = document.createElement('tr'); tr.className = 'hover:bg-white/5 border-b border-white/5';
+                tr.innerHTML = `<td class="p-3 text-center"><input type="checkbox" value="${shop.id}" ${isChecked} onchange="handleReceiptSelect(this)" class="w-4 h-4 accent-sky-400"></td><td class="p-3 font-bold text-sky-400">${shop.id}</td><td class="p-3 font-semibold text-white">${shop.name}</td><td class="p-3 text-right font-bold">${bill.grandTotal.toLocaleString()} ฿</td><td class="p-3 text-center">${statusBadge}</td>`;
+                tbody.appendChild(tr);
+            });
+            updateReceiptCounter();
+            document.getElementById('receiptPagination').innerHTML = generatePaginationHTML(filteredShops.length, currentPageReceipt, 'setPageReceipt');
+        }
+
+        function handleReceiptSelect(cb) {
+            const id = cb.value;
+            if(cb.checked) {
+                if(!selectedReceiptShops.includes(id)) selectedReceiptShops.push(id);
+            } else {
+                selectedReceiptShops = selectedReceiptShops.filter(x => x !== id);
+            }
+            updateReceiptCounter();
+        }
+
+        function updateReceiptCounter() {
+            document.getElementById('receiptSelectCounter').innerText = `เลือกแล้ว ${selectedReceiptShops.length} ร้านค้าในรอบจัดพิมพ์นี้`;
+        }
+
+        function printReceiptBatch() {
+            if(selectedReceiptShops.length === 0) { Swal.fire({ icon: 'warning', title: 'โปรดติ๊กเลือกแผงร้านค้าอย่างน้อย 1 ร้าน', background: '#1e1b4b', color: '#fff' });
+            return; }
+            const date = document.getElementById('receiptDatePicker').value;
+            const printFrame = document.getElementById('printOutputFrame'); 
+            printFrame.innerHTML = ''; 
+            
+            for (let i = 0; i < selectedReceiptShops.length; i += 4) {
+                const chunk = selectedReceiptShops.slice(i, i + 4);
+                let pageContainer = document.createElement('div');
+                pageContainer.style.width = '210mm';
+                pageContainer.style.minHeight = '297mm';
+                pageContainer.style.padding = '5mm';
+                pageContainer.className = 'grid grid-cols-2 gap-4 bg-white text-black p-4 mx-auto print-page';
+                chunk.forEach(shopId => {
+                    const shop = state.shops.find(s => s.id === shopId);
+                    const bill = state.billingDetails[`${date}_${shopId}`] || calculateDefaultBill(shop);
+                    let receiptBlock = document.createElement('div');
+                    receiptBlock.style.width = '98mm';
+ 
+                    receiptBlock.style.height = '138mm';
+                    receiptBlock.style.border = '2px dashed #333';
+                    receiptBlock.style.boxSizing = 'border-box';
+                    receiptBlock.className = 'p-3 flex flex-col justify-between bg-white rounded-lg shadow-sm font-sans text-xs break-inside-avoid';
+ 
+                    receiptBlock.innerHTML = `
+                        <div>
+                            <div class="text-center font-bold border-b pb-1 mb-2"><h2 class="text-sm tracking-wide text-gray-800 uppercase font-black">ใบแจ้งยอดชำระเงิน</h2><p class="text-[10px] text-gray-500">ตลาดมีสุขพระราม 2</p></div>
+                            <div class="mb-2"><div class="flex justify-between font-bold text-[11px]"><span class="text-gray-700">ชื่อร้านค้า ${shop.name}</span> <span class="text-blue-700">${shop.id}</span></div><div class="text-[10px] text-gray-500">รอบประจำวันที่เรียกเก็บ <span class="underline font-medium">${date}</span></div></div>
+                            <table class="w-full text-left mt-1 text-[10px] border-collapse"><thead><tr class="border-b bg-gray-100 text-gray-700"><th class="p-1">รายการบัญชีเรียกเก็บ</th><th class="p-1 text-right">จำนวนเงินสุทธิ</th></tr></thead><tbody class="divide-y text-gray-600"><tr><td class="p-1">ค่าเช่าล็อก</td><td class="p-1 text-right">${bill.rent.toLocaleString()} ฿</td></tr><tr><td class="p-1">ค่าน้ำประปา (มิเตอร์ ${bill.waterBefore}-${bill.waterAfter})</td><td class="p-1 text-right">${bill.waterTotal.toLocaleString()} ฿</td></tr><tr><td class="p-1">ค่าไฟฟ้า (มิเตอร์ ${bill.elecBefore}-${bill.elecAfter})</td><td class="p-1 text-right">${bill.elecTotal.toLocaleString()} ฿</td></tr><tr><td class="p-1">ค่าเก็บขนย้ายขยะมูลฝอยประจำล็อก</td><td class="p-1 text-right">${bill.trash.toLocaleString()} ฿</td></tr><tr><td class="p-1">ค่าปรับส่งล่าช้าเกินกำหนด</td><td class="p-1 text-right">${bill.penalty.toLocaleString()} ฿</td></tr><tr><td class="p-1">รายการเพิ่มเติม / เบ็ดเตล็ดอื่นๆ</td><td class="p-1 text-right">${bill.other.toLocaleString()} ฿</td></tr></tbody><tfoot><tr class="border-t font-bold text-gray-900 bg-gray-50 text-[11px]"><td class="p-1 text-emerald-800">รวมยอดเงินเรียกเก็บทั้งสิ้น</td><td class="p-1 text-right text-emerald-600">${bill.grandTotal.toLocaleString()} ฿</td></tr></tfoot></table>
+                        </div>
+                        <div class="border-t pt-2 mt-2 flex items-center gap-3">
+                            <img src="${state.qrImage}" style="width:52mm; height:52mm;" class="object-contain border p-0.5 rounded bg-white" alt="Scan to pay">
+                            <div class="text-[9px] text-gray-600 leading-tight"><span class="font-bold text-gray-800 block mb-1"><i class="fa-solid fa-building-columns text-blue-700"></i> ช่องทางโอนชำระเงิน</span>ธนาคาร <span class="font-bold text-blue-900">ไทยพาณิชย์ (SCB)</span><br>เลขบัญชี <span class="font-bold tracking-wider text-black block text-xs my-0.5">219-3-005157</span>ชื่อบัญชี <span class="font-medium text-gray-900">น.ส.ปรรณพัชร์ ไชยศรีสุทธิ์</span></div>
+                        </div>`;
+              
+                    pageContainer.appendChild(receiptBlock);
+                });
+                printFrame.appendChild(pageContainer);
+            }
+
+            Swal.fire({ title: 'เตรียมความพร้อมเอกสารสำเร็จ', text: 'กำลังเปิดหน้าต่างพิมพ์รายงานใบแจ้งยอดชำระ', icon: 'success', showCancelButton: true, confirmButtonText: 'ยืนยันสั่งพิมพ์ตัวจริง', cancelButtonText: 'ยกเลิก', background: '#1e1b4b', color: '#fff' }).then((res) => {
+                if(res.isConfirmed) {
+  
+                const originalBody = document.body.innerHTML;
+                document.body.innerHTML = printFrame.innerHTML;
+                window.print();
+                document.body.innerHTML = originalBody;
+            }
+            });
+        }
+
+        // ==================== ENGINE 7: GOOGLE SHEETS INTEGRATION ====================
+        function updateSheetStatusUI(status) {
+            const dot = document.getElementById('sheetStatusDot');
+            const text = document.getElementById('sheetStatusText');
+            if (status === 'online') { dot.className = 'w-2.5 h-2.5 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.8)] animate-pulse'; text.innerText = 'ออนไลน์';
+            text.className = 'text-emerald-400 font-bold'; } else if (status === 'loading') { dot.className = 'w-2.5 h-2.5 rounded-full bg-amber-500 shadow-[0_0_8px_rgba(245,158,11,0.8)] animate-bounce';
+            text.innerText = 'กำลังโหลด...'; text.className = 'text-amber-400 font-bold'; } else { dot.className = 'w-2.5 h-2.5 rounded-full bg-rose-500 shadow-[0_0_8px_rgba(244,63,94,0.6)]'; text.innerText = 'ออฟไลน์';
+            text.className = 'text-rose-400 font-bold'; }
+        }
+
+        async function testSheetConnection() {
+            const url = document.getElementById('settingSheetUrl').value.trim();
+            if (!url) return Swal.fire({ icon: 'warning', title: 'กรุณากรอก URL', background: '#1e1b4b', color: '#fff' });
+            state.sheetUrl = url; localStorage.setItem('market_sheetUrl', url); updateSheetStatusUI('loading');
+            try { const response = await fetch(url + "?action=test"); const data = await response.json(); if (data.status === 'success') { updateSheetStatusUI('online');
+            Swal.fire({ icon: 'success', title: 'เชื่อมต่อสำเร็จ', timer: 1500, showConfirmButton: false, background: '#1e1b4b', color: '#fff' });
+            } else { throw new Error("Invalid response"); } } catch (err) { updateSheetStatusUI('offline');
+            Swal.fire({ icon: 'error', title: 'การเชื่อมต่อล้มเหลว', background: '#1e1b4b', color: '#fff' });
+            }
+        }
+
+        async function loadFromSheet() {
+            if (!state.sheetUrl) return Swal.fire({ icon: 'warning', title: 'กรุณาตั้งค่า URL ก่อน', background: '#1e1b4b', color: '#fff' });
+            updateSheetStatusUI('loading');
+            try {
+                const response = await fetch(state.sheetUrl + "?action=load");
+                const data = await response.json();
+                if (data && Array.isArray(data.shops)) { state.shops = data.shops; commitToStorage(); renderAllTables(); updateSheetStatusUI('online');
+                Swal.fire({ icon: 'success', title: 'ดึงข้อมูลสำเร็จ', text: `อัปเดต ${data.shops.length} รายการ`, background: '#1e1b4b', color: '#fff' });
+                } else { throw new Error("Invalid format"); }
+            } catch (err) { updateSheetStatusUI('offline');
+            Swal.fire({ icon: 'error', title: 'ดาวน์โหลดไม่สำเร็จ', background: '#1e1b4b', color: '#fff' });
+            }
+        }
+
+        async function autoBackupToSheet() {
+            if (!state.sheetUrl) return;
+            try { await fetch(state.sheetUrl, { method: 'POST', mode: 'no-cors', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'backup', shops: state.shops }) });
+            updateSheetStatusUI('online'); } catch (err) { updateSheetStatusUI('offline'); }
+        }
+
+        // ==================== ADD-ON: BILLING AUTOMATION & BACKUP ====================
+
+        // 1. ฟังก์ชันนำเข้าข้อมูลจาก Excel และอัปเดตระบบอัตโนมัติ
+        function importBillingFromExcel(e) {
+            const file = e.target.files[0];
+            if(!file) return;
+            
+            const reader = new FileReader();
+            reader.onload = function(evt) {
+                const wb = XLSX.read(evt.target.result, { type: 'binary' });
+                const ws = wb.Sheets[wb.SheetNames[0]];
+                const importedData = XLSX.utils.sheet_to_json(ws);
+                
+                if (importedData.length > 0) {
+                    let updateCount = 0;
+                    importedData.forEach(row => {
+                        const date = row['วันที่'];
+                        const shopId = row['รหัสร้านค้า'];
+                        
+                    
+                        if(date && shopId) {
+                            const recordKey = `${date}_${shopId}`;
+                            state.billingDetails[recordKey] = {
+                                rent: parseFloat(row['ค่าเช่าล็อก']) || 0,
+                                waterTotal: parseFloat(row['ค่าน้ำประปา']) || 0,
+                                elecTotal: parseFloat(row['ค่าไฟฟ้า']) || 0,
+                                trash: parseFloat(row['ค่าขยะ']) || 0,
+                                penalty: parseFloat(row['ค่าปรับล่าช้า']) || 0,
+                                other: parseFloat(row['อื่นๆ']) || 0,
+                                grandTotal: parseFloat(row['รวมยอดสุทธิ']) || 0,
+                                waterRate: 20, elecRate: 10, waterBefore: 0, waterAfter: 0, elecBefore: 0, elecAfter: 0
+                            };
+                            updateCount++;
+                        }
+                    });
+                    commitToStorage();
+                    renderBillingTable();
+                    renderStatusTable();
+                    autoBackupBillingToSheet();
+                    
+                    Swal.fire({ icon: 'success', title: 'อัปเดตข้อมูลอัตโนมัติสำเร็จ', text: `นำเข้าและอัปเดตข้อมูลจำนวน ${updateCount} รายการ`, background: '#1e1b4b', color: '#fff' });
+                } else {
+                    Swal.fire({ icon: 'error', title: 'ไม่พบข้อมูลในไฟล์ Excel', background: '#1e1b4b', color: '#fff' });
+                }
+                document.getElementById('excelImportBilling').value = '';
+            };
+            reader.readAsBinaryString(file);
+        }
+        
+        function updateBillingSheetStatusUI(status) {
+            const indicator = document.getElementById('billingSheetStatusIndicator');
+            const dot = document.getElementById('billingSheetStatusDot');
+            const text = document.getElementById('billingSheetStatusText');
+            
+            if(!indicator || !dot || !text) return;
+            
+            indicator.classList.remove('hidden');
+            if (status === 'online') { 
+                dot.className = 'w-2.5 h-2.5 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.8)] animate-pulse';
+                text.innerText = 'ออนไลน์';
+                text.className = 'text-emerald-400 font-bold'; 
+            } else if (status === 'loading') { 
+                dot.className = 'w-2.5 h-2.5 rounded-full bg-amber-500 shadow-[0_0_8px_rgba(245,158,11,0.8)] animate-bounce';
+                text.innerText = 'กำลังซิงค์...'; 
+                text.className = 'text-amber-400 font-bold'; 
+            } else { 
+                dot.className = 'w-2.5 h-2.5 rounded-full bg-rose-500 shadow-[0_0_8px_rgba(244,63,94,0.6)]';
+                text.innerText = 'ออฟไลน์';
+                text.className = 'text-rose-400 font-bold'; 
+            }
+        }
+
+        // 2. ฟังก์ชันดึงข้อมูลจาก Google Sheets อัตโนมัติเมื่อใส่ URL
+        async function autoLoadBillingFromSheet() {
+            const url = document.getElementById('billingSheetUrl').value.trim();
+            state.billingSheetUrl = url;
+            localStorage.setItem('market_billingSheetUrl', url);
+            
+            if (!url) {
+                updateBillingSheetStatusUI('offline');
+                return;
+            }
+            
+            updateBillingSheetStatusUI('loading');
+            Swal.fire({ title: 'กำลังซิงค์ข้อมูล...', text: 'กรุณารอสักครู่', allowOutsideClick: false, didOpen: () => { Swal.showLoading(); }, background: '#1e1b4b', color: '#fff' });
+            try {
+                const response = await fetch(url + "?action=loadBilling");
+                const data = await response.json();
+                
+                if (data && data.status === 'success' && data.billingDetails) {
+                    state.billingDetails = { ...state.billingDetails, ...data.billingDetails };
+                    commitToStorage();
+                    renderBillingTable();
+                    renderStatusTable();
+                    
+                    updateBillingSheetStatusUI('online');
+                    Swal.fire({ icon: 'success', title: 'อัปเดตข้อมูลจากระบบ Cloud สำเร็จ', timer: 1500, showConfirmButton: false, background: '#1e1b4b', color: '#fff' });
+                } else {
+                    throw new Error("รูปแบบข้อมูลจาก Google Sheet ไม่ถูกต้อง");
+                }
+            } catch (err) {
+                updateBillingSheetStatusUI('offline');
+                Swal.fire({ icon: 'error', title: 'การเชื่อมต่อล้มเหลว', text: 'โปรดตรวจสอบ URL หรือสิทธิ์การเข้าถึง Web App ของ Google Script', background: '#1e1b4b', color: '#fff' });
+            }
+        }
+
+        // 3. ฟังก์ชันสำหรับสำรองข้อมูลบิลลิ่งไปยัง Google Sheet โดยเฉพาะ
+        async function autoBackupBillingToSheet() {
+            const url = document.getElementById('billingSheetUrl').value.trim();
+            if (!url) return; 
+            
+            try {
+                await fetch(url, { 
+                    method: 'POST', 
+                    mode: 'no-cors', 
+                    headers: { 'Content-Type': 'application/json' }, 
+                    body: JSON.stringify({ 
+                        action: 'backupBilling', 
+                        billingDetails: state.billingDetails 
+                    }) 
+                 });
+                console.log("ระบบสำรองข้อมูลค่าใช้จ่ายอัตโนมัติสำเร็จ");
+            } catch (err) {
+                console.error("การสำรองข้อมูลค่าใช้จ่ายล้มเหลว", err);
+            }
+        }
+    </script>
+</body>
+</html>
